@@ -179,4 +179,7 @@ func TestRenderTableIsWide(t *testing.T) {
 	if !strings.Contains(joinText(lines), "Col A") || !strings.Contains(joinText(lines), "four") {
 		t.Fatalf("table cells missing:\n%s", joinText(lines))
 	}
+	if strings.Contains(joinText(lines), "---") {
+		t.Fatalf("table separator row leaked into output:\n%s", joinText(lines))
+	}
 }
