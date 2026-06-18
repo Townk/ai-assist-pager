@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,19 @@ func TestWindowVerticalOffsetAndHeightPadding(t *testing.T) {
 	}
 	if out[0] != "b" || out[1] != "c" || out[2] != "" || out[3] != "" {
 		t.Fatalf("unexpected window: %#v", out)
+	}
+}
+
+func TestHsliceKeepsTrailingResetWhenWindowEndsBeforeReset(t *testing.T) {
+	// bg + "ABCDE" + reset, sliced to width 3 → visible "ABC" but the closing
+	// reset must survive so the background doesn't bleed past the slice.
+	line := "\x1b[48;2;1;1;1mABCDE\x1b[0m"
+	got := Window([]Line{{Text: line, Wide: true}}, 0, 0, 3, 1)[0]
+	if strip(got) != "ABC" {
+		t.Fatalf("visible content = %q, want %q", strip(got), "ABC")
+	}
+	if !strings.HasSuffix(got, "\x1b[0m") {
+		t.Fatalf("trailing reset dropped (bg would bleed): %q", got)
 	}
 }
 

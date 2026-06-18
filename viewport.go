@@ -67,9 +67,7 @@ func hslice(s string, start, width int) string {
 		col += w
 		i += size
 
-		if col >= end {
-			break
-		}
+		// Keep scanning to the end so trailing zero-width escapes (the closing reset) are emitted; out-of-window runes are already skipped by the col<end guard above.
 	}
 	return string(out)
 }
