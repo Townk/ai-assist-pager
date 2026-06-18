@@ -319,15 +319,29 @@ func (r *renderer) code(n ast.Node) {
 	}
 	width := r.width // content width
 
-	// Language label: right-aligned, 1 space from the right edge.
-	if lang != "" {
-		label := lang + " "
-		lead := width - lipgloss.Width(label)
-		if lead < 0 {
-			lead = 0
+	// Top label line: a "tab" shape.
+	// Left portion: ▂ characters in fg colCodeBg (#282C41), no background.
+	// Right portion (when lang != ""): " lang " with bg colCodeBg, fg colOverlay1.
+	// Total display width == width. Wide=false.
+	{
+		var topLine string
+		if lang != "" {
+			labelRegion := " " + lang + " "
+			labelCols := lipgloss.Width(labelRegion)
+			fillCols := width - labelCols
+			if fillCols < 0 {
+				fillCols = 0
+			}
+			fill := codeFgANSI + strings.Repeat("▂", fillCols) + "\x1b[0m"
+			styledLabel := lipgloss.NewStyle().
+				Background(lipgloss.Color(colCodeBg)).
+				Foreground(lipgloss.Color(colOverlay1)).
+				Render(labelRegion)
+			topLine = fill + styledLabel
+		} else {
+			topLine = codeFgANSI + strings.Repeat("▂", width) + "\x1b[0m"
 		}
-		styled := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay1)).Render(lang) + " "
-		r.lines = append(r.lines, Line{Text: strings.Repeat(" ", lead) + styled, Wide: false})
+		r.lines = append(r.lines, Line{Text: topLine, Wide: false})
 	}
 
 	highlighted := highlight(src, lang)
@@ -348,6 +362,11 @@ func (r *renderer) code(n ast.Node) {
 	for _, hl := range hlLines {
 		r.lines = append(r.lines, Line{Text: bandCode(" "+hl, target), Wide: true})
 	}
+
+	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.
+	// Total display width == width. Wide=false.
+	bottomLine := codeFgANSI + strings.Repeat("🮂", width) + "\x1b[0m"
+	r.lines = append(r.lines, Line{Text: bottomLine, Wide: false})
 }
 
 // highlight runs chroma over src; on any failure it returns src unchanged.

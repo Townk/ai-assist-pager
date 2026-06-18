@@ -222,15 +222,37 @@ func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
 
 func TestRenderCodeBlockLanguageLabel(t *testing.T) {
 	lines := Render("```go\nx := 1\n```", 40)
-	// first line is the label, Wide=false, right-aligned, ends with "go " (1 trailing space).
-	got := strip(lines[0].Text)
+	// first line is the top-label bar, Wide=false.
 	if lines[0].Wide {
 		t.Fatal("label line should not be Wide")
 	}
+	got := strip(lines[0].Text)
+	// Right portion ends with " go " (space + lang + space); suffix is "go ".
 	if !strings.HasSuffix(got, "go ") {
 		t.Fatalf("label line %q should end with %q", got, "go ")
 	}
-	if lipgloss.Width(lines[0].Text) > 40 {
-		t.Fatalf("label line wider than content width")
+	// Left fill contains the ▂ bar character.
+	if !strings.Contains(got, "▂") {
+		t.Fatalf("label line %q should contain '▂' fill", got)
+	}
+	// Total display width must be exactly the content width (40).
+	if w := lipgloss.Width(lines[0].Text); w != 40 {
+		t.Fatalf("label line display width = %d, want 40", w)
+	}
+}
+
+func TestRenderCodeBlockBottomBar(t *testing.T) {
+	lines := Render("```go\nx := 1\n```", 40)
+	// last line is the bottom edge bar, Wide=false, filled with 🮂, width == 40.
+	last := lines[len(lines)-1]
+	if last.Wide {
+		t.Fatal("bottom bar line should not be Wide")
+	}
+	got := strip(last.Text)
+	if !strings.Contains(got, "🮂") {
+		t.Fatalf("bottom bar line %q should contain '🮂'", got)
+	}
+	if w := lipgloss.Width(last.Text); w != 40 {
+		t.Fatalf("bottom bar line display width = %d, want 40", w)
 	}
 }

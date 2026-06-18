@@ -28,6 +28,10 @@ const (
 // manually so it survives chroma's per-token resets.
 const codeBgANSI = "\x1b[48;2;40;44;65m"
 
+// codeFgANSI is the foreground-only version of colCodeBg (#282C41 = R40 G44 B65),
+// used to draw the top/bottom edge bars with no background.
+const codeFgANSI = "\x1b[38;2;40;44;65m"
+
 // bandStyle paints a full-width background band (code blocks, block quotes).
 func bandStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
