@@ -369,7 +369,7 @@ func (r *renderer) code(n ast.Node) {
 	hlLines := strings.Split(highlighted, "\n")
 
 	for _, hl := range hlLines {
-		r.lines = append(r.lines, Line{Text: " " + hl, Wide: true, Bg: codeBgANSI})
+		r.lines = append(r.lines, Line{Text: " " + hl + " ", Wide: true, Bg: codeBgANSI})
 	}
 
 	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.

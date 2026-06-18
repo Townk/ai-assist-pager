@@ -89,22 +89,57 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
+		// Vertical: line
 		case "down", "j":
 			m.yOff++
 		case "up", "k":
 			m.yOff--
-		case "right", "l":
-			m.xOff++
-		case "left", "h":
-			m.xOff--
-		case "pgdown", "ctrl+d":
+		// Vertical: half-page
+		case "ctrl+d":
+			half := m.body() / 2
+			if half < 1 {
+				half = 1
+			}
+			m.yOff += half
+		case "ctrl+u":
+			half := m.body() / 2
+			if half < 1 {
+				half = 1
+			}
+			m.yOff -= half
+		// Vertical: full-page
+		case "ctrl+f", "pgdown":
 			m.yOff += m.body()
-		case "pgup", "ctrl+u":
+		case "ctrl+b", "pgup":
 			m.yOff -= m.body()
+		// Vertical: top/bottom
 		case "g", "home":
 			m.yOff = 0
 		case "G", "end":
 			m.yOff = len(m.lines)
+		// Horizontal: 1-col
+		case "right", "l":
+			m.xOff++
+		case "left", "h":
+			m.xOff--
+		// Horizontal: half-width jump
+		case "L":
+			hstep := m.contentWidth() / 2
+			if hstep < 1 {
+				hstep = 1
+			}
+			m.xOff += hstep
+		case "H":
+			hstep := m.contentWidth() / 2
+			if hstep < 1 {
+				hstep = 1
+			}
+			m.xOff -= hstep
+		// Horizontal: home/end
+		case "0", "^":
+			m.xOff = 0
+		case "$":
+			m.xOff = MaxWideWidth(m.lines) // clampScroll will cap it
 		}
 		m.clampScroll()
 		return m, nil
@@ -119,7 +154,7 @@ func (m model) header() string {
 
 func (m model) hint() string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).
-		Render("↑↓ scroll • ←→ code/tables • g/G top/bottom • q quit")
+		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit")
 }
 
 func (m model) View() tea.View {

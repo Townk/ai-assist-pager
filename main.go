@@ -7,9 +7,19 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/mattn/go-runewidth"
 )
 
 func main() {
+	// Force narrow (1-cell) accounting for East-Asian-ambiguous characters
+	// (em-dash, ellipsis, smart quotes, nerd-font icons).  The terminal renders
+	// them as 1 cell; without this setting go-runewidth counts them as 2,
+	// causing admonition/code background fills to come up short.
+	// Must run before any lipgloss/bubbletea call: charmbracelet/x/ansi reads
+	// RUNEWIDTH_EASTASIAN in its package init, so the env var must be set first.
+	os.Setenv("RUNEWIDTH_EASTASIAN", "0")
+	runewidth.DefaultCondition.EastAsianWidth = false
+
 	var harness string
 	flag.StringVar(&harness, "harness", "agent", "harness label for the header")
 	flag.Parse()
