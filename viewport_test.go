@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -42,4 +41,3 @@ func TestMaxWideWidth(t *testing.T) {
 	}
 }
 
-var _ = strings.TrimSpace

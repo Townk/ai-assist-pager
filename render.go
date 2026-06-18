@@ -93,8 +93,8 @@ func (r *renderer) block(n ast.Node, indent int) {
 			r.table(node)
 			r.blank()
 		default:
-			// Code blocks / quotes / tables are added in later tasks. Until then
-			// fall back to inline text so nothing is silently dropped.
+			// Fallback for block types without an explicit case (e.g. HTML blocks):
+			// render their inline text so nothing is silently dropped.
 			if t := strings.TrimRight(r.inline(c), "\n"); t != "" {
 				r.emitProse(t, indent)
 			}
