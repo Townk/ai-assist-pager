@@ -9,7 +9,6 @@ const (
 	colMauve    = "#cba6f7"
 	colText     = "#cdd6f4"
 	colBase     = "#1e1e2e"
-	colMantle   = "#181825" // quote background band
 	colCodeBg   = "#282C41" // code block background
 	colOverlay0 = "#6c7086"
 	colOverlay1 = "#7f849c"
