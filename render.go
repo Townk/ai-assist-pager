@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -75,6 +78,15 @@ func (r *renderer) block(n ast.Node, indent int) {
 			rule := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).
 				Render(strings.Repeat("─", r.width-indent))
 			r.emitProse(rule, indent)
+			r.blank()
+		case *ast.FencedCodeBlock:
+			r.code(node)
+			r.blank()
+		case *ast.CodeBlock:
+			r.code(node)
+			r.blank()
+		case *ast.Blockquote:
+			r.quote(node, indent)
 			r.blank()
 		default:
 			// Code blocks / quotes / tables are added in later tasks. Until then
@@ -213,5 +225,89 @@ func (r *renderer) blank() { r.lines = append(r.lines, Line{Text: "", Wide: fals
 func (r *renderer) trimTrailingBlank() {
 	for len(r.lines) > 0 && strings.TrimSpace(strip(r.lines[len(r.lines)-1].Text)) == "" {
 		r.lines = r.lines[:len(r.lines)-1]
+	}
+}
+
+// code renders a (fenced) code block: chroma-highlighted, NOT wrapped, each
+// line padded to the block's natural width with the Catppuccin band. Wide=true.
+func (r *renderer) code(n ast.Node) {
+	var raw strings.Builder
+	lines := n.Lines()
+	for i := 0; i < lines.Len(); i++ {
+		seg := lines.At(i)
+		raw.Write(seg.Value(r.src))
+	}
+	src := strings.TrimRight(raw.String(), "\n")
+
+	lang := ""
+	if fc, ok := n.(*ast.FencedCodeBlock); ok && fc.Info != nil {
+		lang = string(fc.Info.Segment.Value(r.src))
+		if sp := strings.IndexByte(lang, ' '); sp >= 0 {
+			lang = lang[:sp]
+		}
+	}
+	highlighted := highlight(src, lang)
+
+	// Pad every line to the widest line so the band is a clean rectangle.
+	rawLines := strings.Split(src, "\n")
+	hlLines := strings.Split(highlighted, "\n")
+	maxw := 0
+	for _, l := range rawLines {
+		if w := lipgloss.Width(l); w > maxw {
+			maxw = w
+		}
+	}
+	band := bandStyle()
+	for i, hl := range hlLines {
+		plainLen := 0
+		if i < len(rawLines) {
+			plainLen = lipgloss.Width(rawLines[i])
+		}
+		padding := ""
+		if maxw > plainLen {
+			padding = strings.Repeat(" ", maxw-plainLen)
+		}
+		r.lines = append(r.lines, Line{Text: band.Render(" " + hl + padding + " "), Wide: true})
+	}
+}
+
+// highlight runs chroma over src; on any failure it returns src unchanged.
+func highlight(src, lang string) string {
+	lexer := lexers.Get(lang)
+	if lexer == nil {
+		lexer = lexers.Analyse(src)
+	}
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	it, err := lexer.Tokenise(nil, src)
+	if err != nil {
+		return src
+	}
+	f := formatters.Get("terminal16m")
+	if f == nil {
+		return src
+	}
+	var buf bytes.Buffer
+	if err := f.Format(&buf, codeStyle(), it); err != nil {
+		return src
+	}
+	return strings.TrimRight(buf.String(), "\n")
+}
+
+// quote renders a block quote: full-width band, "│ " indent token, prose wraps.
+func (r *renderer) quote(n ast.Node, indent int) {
+	start := len(r.lines)
+	r.block(n, indent) // render children as normal prose first
+	token := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Background(lipgloss.Color(colMantle)).Render("│ ")
+	for i := start; i < len(r.lines); i++ {
+		content := r.lines[i].Text
+		// Pad to full pane width so the band spans the line.
+		w := r.width - 2
+		if w < 1 {
+			w = 1
+		}
+		padded := lipgloss.NewStyle().Width(w).Background(lipgloss.Color(colMantle)).Foreground(lipgloss.Color(colText)).Render(strip(content))
+		r.lines[i] = Line{Text: token + padded, Wide: false}
 	}
 }

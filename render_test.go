@@ -95,3 +95,35 @@ func TestRenderInlineStrongText(t *testing.T) {
 		t.Fatalf("strong text missing:\n%s", got)
 	}
 }
+
+func TestRenderCodeBlockIsWideAndUnwrapped(t *testing.T) {
+	long := "x := aaaaaaaaaa + bbbbbbbbbb + cccccccccc + dddddddddd // long line"
+	md := "```go\n" + long + "\n```"
+	lines := Render(md, 20) // pane narrower than the code line
+	var codeLine *Line
+	for i := range lines {
+		if lines[i].Wide {
+			codeLine = &lines[i]
+			break
+		}
+	}
+	if codeLine == nil {
+		t.Fatalf("expected a Wide code line, got none:\n%s", joinText(lines))
+	}
+	if w := len(strip(codeLine.Text)); w <= 20 {
+		t.Fatalf("code line was wrapped/truncated to width (len=%d); it must keep natural width", w)
+	}
+	if !strings.Contains(codeLine.Text, "\x1b[") {
+		t.Fatalf("code line is not styled (no ANSI): %q", codeLine.Text)
+	}
+}
+
+func TestRenderBlockQuote(t *testing.T) {
+	got := joinText(Render("> hello quote", 40))
+	if !strings.Contains(got, "hello quote") {
+		t.Fatalf("quote text missing:\n%s", got)
+	}
+	if !strings.Contains(got, "│") {
+		t.Fatalf("quote indent token missing:\n%s", got)
+	}
+}
