@@ -22,7 +22,11 @@ func main() {
 		}
 		md = string(b)
 	} else {
-		b, _ := os.ReadFile("/dev/stdin")
+		b, err := os.ReadFile("/dev/stdin")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ai-assist-pager: %v\n", err)
+			os.Exit(1)
+		}
 		md = string(b)
 	}
 

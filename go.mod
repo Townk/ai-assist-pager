@@ -3,6 +3,7 @@ module github.com/Townk/ai-assist-pager
 go 1.26.4
 
 require (
+	charm.land/bubbletea/v2 v2.0.7
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/mattn/go-runewidth v0.0.23
@@ -10,7 +11,6 @@ require (
 )
 
 require (
-	charm.land/bubbletea/v2 v2.0.7 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260525132238-948f4557a654 // indirect
 	github.com/charmbracelet/x/ansi v0.11.7 // indirect

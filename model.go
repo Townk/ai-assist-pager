@@ -102,7 +102,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) header() string {
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
 		Render(strings.Repeat("▓", 3) + " ai-assist — " + m.harness)
-	return title + "\n"
+	return title + "\n\n"
 }
 
 func (m model) hint() string {
