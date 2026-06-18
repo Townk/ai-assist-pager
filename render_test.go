@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func joinText(lines []Line) string {
@@ -181,5 +183,54 @@ func TestRenderTableIsWide(t *testing.T) {
 	}
 	if strings.Contains(joinText(lines), "---") {
 		t.Fatalf("table separator row leaked into output:\n%s", joinText(lines))
+	}
+}
+
+func TestStripRemovesFullSGR(t *testing.T) {
+	in := "a\x1b[1mbold\x1b[0m b\x1b[38;2;1;2;3mc\x1b[0m"
+	if got := strip(in); got != "abold bc" {
+		t.Fatalf("strip = %q, want %q", got, "abold bc")
+	}
+}
+
+func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
+	lines := Render("```go\nx := 1\n```", 40)
+	var code *Line
+	for i := range lines {
+		if lines[i].Wide {
+			code = &lines[i]
+			break
+		}
+	}
+	if code == nil {
+		t.Fatal("no wide code line")
+	}
+	// bg applied at the very start
+	if !strings.HasPrefix(code.Text, codeBgANSI) {
+		t.Fatalf("code line does not open with the bg sequence")
+	}
+	// every "\x1b[0m" except the trailing one is followed by the bg re-apply.
+	inner := strings.TrimSuffix(code.Text, "\x1b[0m")
+	if strings.Contains(inner, "\x1b[0m") && !strings.Contains(inner, "\x1b[0m"+codeBgANSI) {
+		t.Fatalf("a reset is not followed by a bg re-apply (bg would drop): %q", code.Text)
+	}
+	// stretched to the content width (40) since the code is narrow.
+	if w := lipgloss.Width(code.Text); w != 40 {
+		t.Fatalf("code band width = %d, want 40 (stretched to content width)", w)
+	}
+}
+
+func TestRenderCodeBlockLanguageLabel(t *testing.T) {
+	lines := Render("```go\nx := 1\n```", 40)
+	// first line is the label, Wide=false, right-aligned, ends with "go " (1 trailing space).
+	got := strip(lines[0].Text)
+	if lines[0].Wide {
+		t.Fatal("label line should not be Wide")
+	}
+	if !strings.HasSuffix(got, "go ") {
+		t.Fatalf("label line %q should end with %q", got, "go ")
+	}
+	if lipgloss.Width(lines[0].Text) > 40 {
+		t.Fatalf("label line wider than content width")
 	}
 }

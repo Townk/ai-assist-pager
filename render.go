@@ -16,24 +16,36 @@ import (
 )
 
 // strip removes ANSI/CSI escape sequences so callers can measure or assert on
-// the visible text. It recognises ESC-introduced sequences and ends each one at
-// its final byte (CSI final bytes are 0x40–0x7e).
+// the visible text. ESC introduces a sequence; for CSI ("ESC [") it consumes
+// the parameter/intermediate bytes and the final byte (0x40–0x7e).
 func strip(s string) string {
 	var b strings.Builder
-	inEsc := false
+	const (
+		normal = iota
+		sawESC
+		inCSI
+	)
+	state := normal
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c == 0x1b { // ESC
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if c >= 0x40 && c <= 0x7e {
-				inEsc = false
+		switch state {
+		case normal:
+			if c == 0x1b {
+				state = sawESC
+			} else {
+				b.WriteByte(c)
 			}
-			continue
+		case sawESC:
+			if c == '[' {
+				state = inCSI
+			} else {
+				state = normal // non-CSI escape; sequence over
+			}
+		case inCSI:
+			if c >= 0x40 && c <= 0x7e {
+				state = normal // final byte, consumed
+			}
 		}
-		b.WriteByte(c)
 	}
 	return b.String()
 }
@@ -183,7 +195,7 @@ func (r *renderer) inline(n ast.Node) string {
 			}
 			b.WriteString(st.Render(r.inline(node)))
 		case *ast.CodeSpan:
-			st := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Background(lipgloss.Color(colMantle))
+			st := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Background(lipgloss.Color(colCodeBg))
 			b.WriteString(st.Render(" " + r.inlineText(node) + " "))
 		case *ast.Link:
 			st := lipgloss.NewStyle().Foreground(lipgloss.Color(colBlue)).Underline(true)
@@ -271,8 +283,22 @@ func (r *renderer) table(n *extast.Table) {
 	}
 }
 
+// bandCode wraps one fg-highlighted code line in a continuous background that
+// survives chroma's per-token "\x1b[0m" resets, padded to `width` visible
+// columns. chroma sets only foreground (we removed its Background); the bg is
+// ours and is re-applied after each reset so it never drops mid-line.
+func bandCode(line string, width int) string {
+	s := codeBgANSI + strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+codeBgANSI)
+	if pad := width - lipgloss.Width(line); pad > 0 {
+		s += strings.Repeat(" ", pad)
+	}
+	return s + "\x1b[0m"
+}
+
 // code renders a (fenced) code block: chroma-highlighted, NOT wrapped, each
-// line padded to the block's natural width with the Catppuccin band. Wide=true.
+// line padded to the target width with a continuous code background. Wide=true.
+// If the block has a language, a right-aligned language label is emitted first
+// (Wide=false).
 func (r *renderer) code(n ast.Node) {
 	var raw strings.Builder
 	lines := n.Lines()
@@ -290,28 +316,36 @@ func (r *renderer) code(n ast.Node) {
 			lang = lang[:sp]
 		}
 	}
-	highlighted := highlight(src, lang)
+	width := r.width // content width
 
-	// Pad every line to the widest line so the band is a clean rectangle.
+	// Language label: right-aligned, 1 space from the right edge.
+	if lang != "" {
+		label := lang + " "
+		lead := width - lipgloss.Width(label)
+		if lead < 0 {
+			lead = 0
+		}
+		styled := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay1)).Render(lang) + " "
+		r.lines = append(r.lines, Line{Text: strings.Repeat(" ", lead) + styled, Wide: false})
+	}
+
+	highlighted := highlight(src, lang)
 	rawLines := strings.Split(src, "\n")
 	hlLines := strings.Split(highlighted, "\n")
+
 	maxw := 0
 	for _, l := range rawLines {
 		if w := lipgloss.Width(l); w > maxw {
 			maxw = w
 		}
 	}
-	band := bandStyle()
-	for i, hl := range hlLines {
-		plainLen := 0
-		if i < len(rawLines) {
-			plainLen = lipgloss.Width(rawLines[i])
-		}
-		padding := ""
-		if maxw > plainLen {
-			padding = strings.Repeat(" ", maxw-plainLen)
-		}
-		r.lines = append(r.lines, Line{Text: band.Render(" " + hl + padding + " "), Wide: true})
+	// target visible width of each banded line; +2 for the 1-col inset each side.
+	target := maxw + 2
+	if target < width {
+		target = width
+	}
+	for _, hl := range hlLines {
+		r.lines = append(r.lines, Line{Text: bandCode(" "+hl, target), Wide: true})
 	}
 }
 

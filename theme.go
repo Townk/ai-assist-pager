@@ -10,7 +10,8 @@ const (
 	colMauve    = "#cba6f7"
 	colText     = "#cdd6f4"
 	colBase     = "#1e1e2e"
-	colMantle   = "#181825" // code / quote background band
+	colMantle   = "#181825" // quote background band
+	colCodeBg   = "#282C41" // code block background
 	colOverlay0 = "#6c7086"
 	colOverlay1 = "#7f849c"
 	colSurface0 = "#313244"
@@ -23,6 +24,10 @@ const (
 	colSubtext  = "#9399b2"
 )
 
+// codeBgANSI is the code block background (#282C41 = R40 G44 B65) applied
+// manually so it survives chroma's per-token resets.
+const codeBgANSI = "\x1b[48;2;40;44;65m"
+
 // bandStyle paints a full-width background band (code blocks, block quotes).
 func bandStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
@@ -34,7 +39,6 @@ func bandStyle() lipgloss.Style {
 // map the glow theme uses), so code highlighting matches the rest of the UI
 // regardless of whether the chroma version ships a Catppuccin style.
 var catppuccinChroma = chroma.MustNewStyle("catppuccin-mocha", chroma.StyleEntries{
-	chroma.Background:     "bg:" + colMantle,
 	chroma.Text:           colText,
 	chroma.Comment:        colOverlay0,
 	chroma.CommentPreproc: colBlue,
