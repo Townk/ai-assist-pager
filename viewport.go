@@ -24,7 +24,11 @@ func Window(lines []Line, xOffset, yOffset, width, height int) []string {
 			out = append(out, l.Text)
 			continue
 		}
-		out = append(out, hslice(l.Text, xOffset, width))
+		sl := hslice(l.Text, xOffset, width)
+		if l.Bg != "" {
+			sl = band(sl, l.Bg, width)
+		}
+		out = append(out, sl)
 	}
 	return out
 }

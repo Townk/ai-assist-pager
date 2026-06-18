@@ -366,22 +366,10 @@ func (r *renderer) code(n ast.Node) {
 	}
 
 	highlighted := highlight(src, lang)
-	rawLines := strings.Split(src, "\n")
 	hlLines := strings.Split(highlighted, "\n")
 
-	maxw := 0
-	for _, l := range rawLines {
-		if w := lipgloss.Width(l); w > maxw {
-			maxw = w
-		}
-	}
-	// target visible width of each banded line; +2 for the 1-col inset each side.
-	target := maxw + 2
-	if target < width {
-		target = width
-	}
 	for _, hl := range hlLines {
-		r.lines = append(r.lines, Line{Text: band(" "+hl, codeBgANSI, target), Wide: true})
+		r.lines = append(r.lines, Line{Text: " " + hl, Wide: true, Bg: codeBgANSI})
 	}
 
 	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.

@@ -294,18 +294,26 @@ func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
 	if code == nil {
 		t.Fatal("no wide code line")
 	}
-	// bg applied at the very start
-	if !strings.HasPrefix(code.Text, codeBgANSI) {
-		t.Fatalf("code line does not open with the bg sequence")
+	// bg is now carried in the Bg field, not baked into Text
+	if code.Bg != codeBgANSI {
+		t.Fatalf("code line Bg = %q, want codeBgANSI", code.Bg)
 	}
-	// every "\x1b[0m" except the trailing one is followed by the bg re-apply.
-	inner := strings.TrimSuffix(code.Text, "\x1b[0m")
+	// Text must NOT already contain a background sequence (it's fg-only)
+	if strings.Contains(code.Text, "48;2") {
+		t.Fatalf("code line Text contains a background sequence; it should be fg-only: %q", code.Text)
+	}
+	// render through the viewport: backdrop must fill the full viewport width
+	out := Window([]Line{*code}, 0, 0, 40, 1)[0]
+	if !strings.HasPrefix(out, codeBgANSI) {
+		t.Fatalf("viewport output does not open with bg sequence")
+	}
+	if w := lipgloss.Width(out); w != 40 {
+		t.Fatalf("viewport output width = %d, want 40", w)
+	}
+	// every "\x1b[0m" inside (except the trailing one) must be followed by the bg re-apply
+	inner := strings.TrimSuffix(out, "\x1b[0m")
 	if strings.Contains(inner, "\x1b[0m") && !strings.Contains(inner, "\x1b[0m"+codeBgANSI) {
-		t.Fatalf("a reset is not followed by a bg re-apply (bg would drop): %q", code.Text)
-	}
-	// stretched to the content width (40) since the code is narrow.
-	if w := lipgloss.Width(code.Text); w != 40 {
-		t.Fatalf("code band width = %d, want 40 (stretched to content width)", w)
+		t.Fatalf("a reset is not followed by a bg re-apply (bg would drop): %q", out)
 	}
 }
 

@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func TestWindowProseIgnoresXOffset(t *testing.T) {
@@ -52,6 +54,20 @@ func TestMaxWideWidth(t *testing.T) {
 	}
 	if got := MaxWideWidth([]Line{{Text: "p", Wide: false}}); got != 0 {
 		t.Fatalf("MaxWideWidth with no wide lines = %d, want 0", got)
+	}
+}
+
+func TestWindowBgBackdropFillsWhenScrolledPastText(t *testing.T) {
+	l := Line{Text: "\x1b[38;2;1;2;3mABC\x1b[0m", Wide: true, Bg: "\x1b[48;2;9;9;9m"}
+	out := Window([]Line{l}, 5 /*xOff past the 3-col text*/, 0, 10, 1)[0]
+	if lipgloss.Width(out) != 10 {
+		t.Fatalf("backdrop should fill 10 cols, got %d", lipgloss.Width(out))
+	}
+	if !strings.HasPrefix(out, "\x1b[48;2;9;9;9m") {
+		t.Fatalf("missing bg backdrop")
+	}
+	if !strings.HasSuffix(out, "\x1b[0m") {
+		t.Fatalf("missing closing reset")
 	}
 }
 
