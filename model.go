@@ -23,14 +23,27 @@ func newModel(harness, md string) model {
 
 func (m model) Init() tea.Cmd { return nil }
 
-// headerRows is the height the header takes (title + blank).
-const headerRows = 2
+// headerRows is the height the header takes (title only; top padding provides
+// the gap between header and body).
+const headerRows = 1
 
 // hintRows is the height the bottom key-hint takes.
 const hintRows = 1
 
+// contentWidth returns the render/scroll width: full width minus 2-col left
+// and 2-col right margins (floored at 1).
+func (m *model) contentWidth() int {
+	w := m.width - 4
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// body returns the number of visible body rows.
+// Layout: header(1) + topPad(1) + body(H-4) + botPad(1) + hint(1) = H.
 func (m *model) body() int {
-	h := m.height - headerRows - hintRows
+	h := m.height - headerRows - hintRows - 2 // subtract top and bottom padding rows
 	if h < 1 {
 		h = 1
 	}
@@ -38,7 +51,7 @@ func (m *model) body() int {
 }
 
 func (m *model) reflow() {
-	m.lines = Render(m.md, m.width)
+	m.lines = Render(m.md, m.contentWidth())
 	m.clampScroll()
 }
 
@@ -53,7 +66,7 @@ func (m *model) clampScroll() {
 	if m.yOff < 0 {
 		m.yOff = 0
 	}
-	maxX := MaxWideWidth(m.lines) - m.width
+	maxX := MaxWideWidth(m.lines) - m.contentWidth()
 	if maxX < 0 {
 		maxX = 0
 	}
@@ -100,9 +113,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) header() string {
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
 		Render(strings.Repeat("▓", 3) + " ai-assist — " + m.harness)
-	return title + "\n\n"
 }
 
 func (m model) hint() string {
@@ -111,20 +123,38 @@ func (m model) hint() string {
 }
 
 func (m model) View() tea.View {
-	rows := Window(m.lines, m.xOff, m.yOff, m.width, m.body())
-	body := strings.Join(rows, "\n")
-	v := tea.NewView(m.header() + body + "\n" + m.hint())
+	cw := m.contentWidth()
+	rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
+	var sb strings.Builder
+	// Row 1: header (left-padded)
+	sb.WriteString("  " + m.header() + "\n")
+	// Row 2: top padding blank
+	sb.WriteString("\n")
+	// Rows 3..H-2: body (each left-padded)
+	for _, row := range rows {
+		sb.WriteString("  " + row + "\n")
+	}
+	// Row H-1: bottom padding blank
+	sb.WriteString("\n")
+	// Row H: hint (left-padded)
+	sb.WriteString("  " + m.hint())
+	v := tea.NewView(sb.String())
 	v.AltScreen = true
 	return v
 }
 
-// staticRender returns the full rendered content (no scroll chrome) for printing
-// to the pane on exit, so the docked pane parks showing the reply.
+// staticRender returns the full rendered content (no scroll chrome) for
+// printing to the pane on exit, so the docked pane parks showing the reply.
+// Content is wrapped at contentWidth and left-padded with 2 spaces to match
+// the interactive View().
 func (m model) staticRender() string {
-	lines := Render(m.md, m.width)
-	parts := make([]string, len(lines))
-	for i, l := range lines {
-		parts[i] = l.Text
+	cw := m.contentWidth()
+	lines := Render(m.md, cw)
+	var sb strings.Builder
+	sb.WriteString("  " + m.header() + "\n")
+	sb.WriteString("\n")
+	for _, l := range lines {
+		sb.WriteString("  " + l.Text + "\n")
 	}
-	return m.header() + strings.Join(parts, "\n") + "\n"
+	return sb.String()
 }
