@@ -119,7 +119,7 @@ func (m model) header() string {
 
 func (m model) hint() string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).
-		Render("  ↑↓ scroll • ←→ code/tables • g/G top/bottom • q quit")
+		Render("↑↓ scroll • ←→ code/tables • g/G top/bottom • q quit")
 }
 
 func (m model) View() tea.View {

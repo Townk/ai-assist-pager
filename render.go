@@ -289,6 +289,7 @@ func (r *renderer) table(n *extast.Table) {
 // ours and is re-applied after each reset so it never drops mid-line.
 func bandCode(line string, width int) string {
 	s := codeBgANSI + strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+codeBgANSI)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+codeBgANSI)
 	if pad := width - lipgloss.Width(line); pad > 0 {
 		s += strings.Repeat(" ", pad)
 	}
