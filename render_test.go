@@ -163,3 +163,20 @@ func TestRenderCodeBlockUnknownLanguageNoPanic(t *testing.T) {
 		t.Fatalf("code text missing from unknown-language block:\n%s", joinText(lines))
 	}
 }
+
+func TestRenderTableIsWide(t *testing.T) {
+	md := "| Col A | Col B |\n|---|---|\n| one | two |\n| three | four |"
+	lines := Render(md, 12)
+	wide := false
+	for _, l := range lines {
+		if l.Wide {
+			wide = true
+		}
+	}
+	if !wide {
+		t.Fatalf("table produced no Wide lines:\n%s", joinText(lines))
+	}
+	if !strings.Contains(joinText(lines), "Col A") || !strings.Contains(joinText(lines), "four") {
+		t.Fatalf("table cells missing:\n%s", joinText(lines))
+	}
+}

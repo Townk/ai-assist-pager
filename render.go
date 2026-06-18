@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/yuin/goldmark"
@@ -87,6 +88,9 @@ func (r *renderer) block(n ast.Node, indent int) {
 			r.blank()
 		case *ast.Blockquote:
 			r.quote(node, indent)
+			r.blank()
+		case *extast.Table:
+			r.table(node)
 			r.blank()
 		default:
 			// Code blocks / quotes / tables are added in later tasks. Until then
@@ -225,6 +229,45 @@ func (r *renderer) blank() { r.lines = append(r.lines, Line{Text: "", Wide: fals
 func (r *renderer) trimTrailingBlank() {
 	for len(r.lines) > 0 && strings.TrimSpace(strip(r.lines[len(r.lines)-1].Text)) == "" {
 		r.lines = r.lines[:len(r.lines)-1]
+	}
+}
+
+// table renders a GFM table via lipgloss/table at its natural width (no wrap),
+// emitting Wide=true lines so it scrolls horizontally like a code block.
+func (r *renderer) table(n *extast.Table) {
+	var header []string
+	var rows [][]string
+	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
+		var cells []string
+		for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
+			cells = append(cells, strings.TrimSpace(strip(r.inline(cell))))
+		}
+		switch row.(type) {
+		case *extast.TableHeader:
+			header = cells
+		default:
+			rows = append(rows, cells)
+		}
+	}
+
+	tbl := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))).
+		Headers(header...).
+		Rows(rows...).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colMauve)).Padding(0, 1)
+			}
+			return lipgloss.NewStyle().Foreground(lipgloss.Color(colText)).Padding(0, 1)
+		})
+	// Do NOT call .Width(): let the table take its natural width so wide tables
+	// overflow the pane and scroll horizontally.
+	for _, ln := range strings.Split(tbl.String(), "\n") {
+		if ln == "" {
+			continue
+		}
+		r.lines = append(r.lines, Line{Text: ln, Wide: true})
 	}
 }
 
