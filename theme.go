@@ -1,8 +1,36 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/alecthomas/chroma/v2"
 )
+
+// parseHex returns the r,g,b components of a "#RRGGBB" hex string.
+func parseHex(hex string) (int, int, int) {
+	h := hex
+	if len(h) > 0 && h[0] == '#' {
+		h = h[1:]
+	}
+	rv, _ := strconv.ParseInt(h[0:2], 16, 32)
+	gv, _ := strconv.ParseInt(h[2:4], 16, 32)
+	bv, _ := strconv.ParseInt(h[4:6], 16, 32)
+	return int(rv), int(gv), int(bv)
+}
+
+// darken scales a #RRGGBB color toward black by factor f (0..1); returns "#RRGGBB".
+// Use f≈0.20 for a "very dark" tint.
+func darken(hex string, f float64) string {
+	rv, gv, bv := parseHex(hex)
+	return fmt.Sprintf("#%02X%02X%02X", int(float64(rv)*f), int(float64(gv)*f), int(float64(bv)*f))
+}
+
+// bgANSI returns the truecolor background SGR sequence for a #RRGGBB hex color.
+func bgANSI(hex string) string {
+	rv, gv, bv := parseHex(hex)
+	return fmt.Sprintf("\x1b[48;2;%d;%d;%dm", rv, gv, bv)
+}
 
 // Catppuccin Mocha.
 const (

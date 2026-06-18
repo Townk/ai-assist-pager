@@ -31,9 +31,8 @@ var admonitions = map[string]admon{
 	"important": {"Important", "󰀦", colMauve},
 	"warning":   {"Warning", "󰀪", colPeach},
 	"caution":   {"Caution", "󰳦", colRed},
+	"quote":     {"Quote", "󱆨", colOverlay0},
 }
-
-var defaultAdmon = admon{"Quote", "󱆨", colOverlay0} // dark-gray border + title
 
 // admonMarkerRe matches an optional leading [!TYPE] marker in a block-quote body.
 var admonMarkerRe = regexp.MustCompile(`(?is)^\s*\[!(\w+)\]\s*`)
@@ -306,14 +305,13 @@ func (r *renderer) table(n *extast.Table) {
 	}
 }
 
-// bandCode wraps one fg-highlighted code line in a continuous background that
-// survives chroma's per-token "\x1b[0m" resets, padded to `width` visible
-// columns. chroma sets only foreground (we removed its Background); the bg is
-// ours and is re-applied after each reset so it never drops mid-line.
-func bandCode(line string, width int) string {
-	s := codeBgANSI + strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+codeBgANSI)
-	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+codeBgANSI)
-	if pad := width - lipgloss.Width(line); pad > 0 {
+// band wraps content in a continuous background sequence `bg` that survives
+// embedded "\x1b[0m"/"\x1b[m" resets, padded to `width` visible columns.
+// The bg sequence is re-applied after every reset so it never drops mid-line.
+func band(content string, bg string, width int) string {
+	s := bg + strings.ReplaceAll(content, "\x1b[0m", "\x1b[0m"+bg)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+bg)
+	if pad := width - lipgloss.Width(content); pad > 0 {
 		s += strings.Repeat(" ", pad)
 	}
 	return s + "\x1b[0m"
@@ -383,7 +381,7 @@ func (r *renderer) code(n ast.Node) {
 		target = width
 	}
 	for _, hl := range hlLines {
-		r.lines = append(r.lines, Line{Text: bandCode(" "+hl, target), Wide: true})
+		r.lines = append(r.lines, Line{Text: band(" "+hl, codeBgANSI, target), Wide: true})
 	}
 
 	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.
@@ -418,7 +416,9 @@ func highlight(src, lang string) string {
 
 // quote renders a block quote as a GitHub-style admonition.
 // It collects the child block text, optionally detects a [!TYPE] marker, then
-// emits a colored ▋ border on every line with an icon+title header.
+// emits a colored ▋ border on every line. A recognized [!TYPE] marker also
+// emits a header line with icon + title. A bare quote (no marker) emits only
+// the bordered body lines (no header) with a colOverlay0 border.
 func (r *renderer) quote(n ast.Node, indent int) {
 	// Step 1: collect body text from child blocks.
 	var pieces []string
@@ -435,23 +435,34 @@ func (r *renderer) quote(n ast.Node, indent int) {
 	body := strings.Join(pieces, "\n")
 
 	// Step 2: detect [!type] marker.
-	a := defaultAdmon
+	var a *admon
 	if m := admonMarkerRe.FindStringSubmatch(body); m != nil {
 		key := strings.ToLower(m[1])
 		if entry, ok := admonitions[key]; ok {
-			a = entry
+			a = &entry
 			body = admonMarkerRe.ReplaceAllString(body, "")
 		}
 	}
 
-	// Step 3: build styles.
-	border := lipgloss.NewStyle().Foreground(lipgloss.Color(a.color)).Render("▋")
-	headerText := lipgloss.NewStyle().Foreground(lipgloss.Color(a.color)).Render(a.icon + " " + a.title)
+	// Step 3: determine border color and dark background.
+	color := colOverlay0
+	if a != nil {
+		color = a.color
+	}
+	bg := bgANSI(darken(color, 0.20))
+
+	// Step 4: build styles.
+	borderGlyph := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render("▋")
 	bodyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colText)).Italic(true)
 
-	// Step 4: emit lines.
-	r.lines = append(r.lines, Line{Text: border + " " + headerText, Wide: false})
+	// Step 5: emit header (only for recognized [!type] admonitions).
+	if a != nil {
+		headerText := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(a.icon + " " + a.title)
+		inner := borderGlyph + " " + headerText
+		r.lines = append(r.lines, Line{Text: band(inner, bg, r.width), Wide: false})
+	}
 
+	// Step 6: emit body lines.
 	trimmed := strings.TrimSpace(body)
 	if trimmed != "" {
 		w := r.width - 2
@@ -460,7 +471,8 @@ func (r *renderer) quote(n ast.Node, indent int) {
 		}
 		wrapped := bodyStyle.Width(w).Render(trimmed)
 		for _, ln := range strings.Split(wrapped, "\n") {
-			r.lines = append(r.lines, Line{Text: border + " " + ln, Wide: false})
+			inner := borderGlyph + " " + ln
+			r.lines = append(r.lines, Line{Text: band(inner, bg, r.width), Wide: false})
 		}
 	}
 }

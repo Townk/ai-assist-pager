@@ -76,6 +76,10 @@ async def build_pool(dsn: str):
 > the admonition border should stay flush on every wrapped line with no
 > overflow beyond the pane edge.
 
+> [!quote]
+> "In the middle of difficulty lies opportunity." — a classic reminder that
+> every outage is also a chance to harden the system against the next one.
+
 > [!note]
 > The connection pool exhaustion is the **root cause** of the vector-store
 > timeouts. Fixing `max_size` will resolve both symptoms in one deployment.

@@ -132,22 +132,22 @@ func TestRenderBlockQuote(t *testing.T) {
 
 func TestRenderQuoteDefaultAdmonition(t *testing.T) {
 	lines := Render("> hello there friend", 40)
-	hdr := strip(lines[0].Text)
-	if !strings.Contains(hdr, "▋") || !strings.Contains(hdr, "Quote") {
-		t.Fatalf("header missing border/title: %q", hdr)
+	// bare quote: NO header line — the first emitted line is a body line.
+	first := strip(lines[0].Text)
+	if !strings.HasPrefix(first, "▋ ") {
+		t.Fatalf("first line should be a body line starting with '▋ ', got: %q", first)
 	}
-	// a body line exists, starts with the border, carries the text
-	foundBody := false
-	for _, l := range lines[1:] {
-		if strings.HasPrefix(strip(l.Text), "▋ ") && strings.Contains(strip(l.Text), "hello") {
-			foundBody = true
+	if !strings.Contains(first, "hello") {
+		t.Fatalf("first (body) line should contain the body text, got: %q", first)
+	}
+	// no line should contain the word "Quote" (no title header)
+	for _, l := range lines {
+		if strings.Contains(strip(l.Text), "Quote") {
+			t.Fatalf("bare quote should have no 'Quote' title header, but found it in: %q", strip(l.Text))
 		}
 		if l.Wide {
 			t.Fatalf("quote line should not be Wide")
 		}
-	}
-	if !foundBody {
-		t.Fatalf("no body line found:\n%s", joinText(lines))
 	}
 }
 
@@ -163,6 +163,50 @@ func TestRenderQuoteAdmonitionType(t *testing.T) {
 	}
 	if !strings.Contains(body, "be careful here") {
 		t.Fatalf("body text missing:\n%s", body)
+	}
+}
+
+func TestRenderQuoteExplicitQuoteType(t *testing.T) {
+	lines := Render("> [!quote]\n> some quoted body", 40)
+	// first line is the header: must contain "Quote" and the 󱆨 glyph
+	hdr := strip(lines[0].Text)
+	if !strings.Contains(hdr, "Quote") {
+		t.Fatalf("[!quote] header missing 'Quote' title: %q", hdr)
+	}
+	if !strings.Contains(hdr, "󱆨") {
+		t.Fatalf("[!quote] header missing 󱆨 icon: %q", hdr)
+	}
+	// body present
+	body := joinText(lines)
+	if !strings.Contains(body, "some quoted body") {
+		t.Fatalf("[!quote] body text missing:\n%s", body)
+	}
+}
+
+func TestDarken(t *testing.T) {
+	got := darken("#FFFFFF", 0.20)
+	if got != "#333333" {
+		t.Fatalf("darken(#FFFFFF, 0.20) = %q, want #333333", got)
+	}
+	// darken #89b4fa by 0.20 — all components must be less than original
+	origR, origG, origB := parseHex("#89b4fa")
+	dr, dg, db := parseHex(darken("#89b4fa", 0.20))
+	if dr >= origR || dg >= origG || db >= origB {
+		t.Fatalf("darken(#89b4fa, 0.20) = %q; expected all components < originals (%d,%d,%d)", darken("#89b4fa", 0.20), origR, origG, origB)
+	}
+}
+
+func TestBandFillsWidthWithBg(t *testing.T) {
+	bg := "\x1b[48;2;1;1;1m"
+	result := band("x", bg, 10)
+	if !strings.HasPrefix(result, bg) {
+		t.Fatalf("band result does not start with bg sequence: %q", result)
+	}
+	if !strings.HasSuffix(result, "\x1b[0m") {
+		t.Fatalf("band result does not end with reset: %q", result)
+	}
+	if w := lipgloss.Width(result); w != 10 {
+		t.Fatalf("band width = %d, want 10", w)
 	}
 }
 
