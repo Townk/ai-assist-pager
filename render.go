@@ -11,18 +11,20 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-// strip removes ANSI SGR sequences so callers can measure/compare plain text.
+// strip removes ANSI/CSI escape sequences so callers can measure or assert on
+// the visible text. It recognises ESC-introduced sequences and ends each one at
+// its final byte (CSI final bytes are 0x40–0x7e).
 func strip(s string) string {
 	var b strings.Builder
 	inEsc := false
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c == 0x1b {
+		if c == 0x1b { // ESC
 			inEsc = true
 			continue
 		}
 		if inEsc {
-			if c == 'm' {
+			if c >= 0x40 && c <= 0x7e {
 				inEsc = false
 			}
 			continue
@@ -104,6 +106,8 @@ func (r *renderer) list(l *ast.List, indent int) {
 	for item := l.FirstChild(); item != nil; item = item.NextSibling() {
 		marker := "• "
 		if l.IsOrdered() {
+			// l.Start is the first item's number; i is the zero-based offset, so
+			// l.Start+i gives the correct display number for each item.
 			marker = itoa(l.Start+i) + ". "
 		}
 		// First child of a list item is usually a paragraph/textblock.
