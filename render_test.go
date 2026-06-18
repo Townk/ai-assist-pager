@@ -127,3 +127,39 @@ func TestRenderBlockQuote(t *testing.T) {
 		t.Fatalf("quote indent token missing:\n%s", got)
 	}
 }
+
+func TestRenderCodeBlockNamedLanguageHighlights(t *testing.T) {
+	md := "```go\npackage main\n```"
+	lines := Render(md, 80)
+	var codeLine *Line
+	for i := range lines {
+		if lines[i].Wide {
+			codeLine = &lines[i]
+			break
+		}
+	}
+	if codeLine == nil {
+		t.Fatalf("expected a Wide code line, got none:\n%s", joinText(lines))
+	}
+	if !strings.Contains(codeLine.Text, "\x1b[") {
+		t.Fatalf("named language 'go' was not highlighted (no ANSI escape in output): %q", codeLine.Text)
+	}
+}
+
+func TestRenderCodeBlockUnknownLanguageNoPanic(t *testing.T) {
+	md := "```unknown_xyz\nhello world\n```"
+	lines := Render(md, 80)
+	var codeLine *Line
+	for i := range lines {
+		if lines[i].Wide {
+			codeLine = &lines[i]
+			break
+		}
+	}
+	if codeLine == nil {
+		t.Fatalf("expected a Wide code line, got none:\n%s", joinText(lines))
+	}
+	if !strings.Contains(strip(codeLine.Text), "hello world") {
+		t.Fatalf("code text missing from unknown-language block:\n%s", joinText(lines))
+	}
+}

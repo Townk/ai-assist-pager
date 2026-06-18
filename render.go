@@ -242,6 +242,7 @@ func (r *renderer) code(n ast.Node) {
 	lang := ""
 	if fc, ok := n.(*ast.FencedCodeBlock); ok && fc.Info != nil {
 		lang = string(fc.Info.Segment.Value(r.src))
+		lang = strings.TrimSpace(lang)
 		if sp := strings.IndexByte(lang, ' '); sp >= 0 {
 			lang = lang[:sp]
 		}
@@ -303,7 +304,7 @@ func (r *renderer) quote(n ast.Node, indent int) {
 	for i := start; i < len(r.lines); i++ {
 		content := r.lines[i].Text
 		// Pad to full pane width so the band spans the line.
-		w := r.width - 2
+		w := r.width - lipgloss.Width(token)
 		if w < 1 {
 			w = 1
 		}
