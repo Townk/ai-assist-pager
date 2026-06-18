@@ -43,7 +43,7 @@ func (m *model) contentWidth() int {
 // body returns the number of visible body rows.
 // Layout: header(1) + topPad(1) + body(H-4) + botPad(1) + hint(1) = H.
 func (m *model) body() int {
-	h := m.height - headerRows - hintRows - 2 // subtract top and bottom padding rows
+	h := m.height - headerRows - hintRows - 3 // subtract leading blank + top and bottom padding rows
 	if h < 1 {
 		h = 1
 	}
@@ -126,9 +126,11 @@ func (m model) View() tea.View {
 	cw := m.contentWidth()
 	rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
 	var sb strings.Builder
-	// Row 1: header (left-padded)
+	// Empty line before the title.
+	sb.WriteString("\n")
+	// Header (left-padded)
 	sb.WriteString("  " + m.header() + "\n")
-	// Row 2: top padding blank
+	// Top padding blank
 	sb.WriteString("\n")
 	// Rows 3..H-2: body (each left-padded)
 	for _, row := range rows {

@@ -52,14 +52,11 @@ func main() {
 		tea.WithOutput(tty),
 		tea.WithColorProfile(colorprofile.TrueColor),
 	)
-	final, err := prog.Run()
-	if err != nil {
+	// On quit (q/Esc) we exit straight away; the docked pane is spawned with
+	// --close-on-exit, so it closes rather than parking. No static dump (it would
+	// just flash before the pane closes).
+	if _, err := prog.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "ai-assist-pager: %v\n", err)
 		os.Exit(1)
-	}
-	// Alt-screen is torn down on exit; print the static render so the pane parks
-	// with the reply visible instead of a blank pane.
-	if fm, ok := final.(model); ok {
-		fmt.Print(fm.staticRender())
 	}
 }
