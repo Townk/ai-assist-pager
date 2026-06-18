@@ -6,12 +6,12 @@ require (
 	charm.land/bubbletea/v2 v2.0.7
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/alecthomas/chroma/v2 v2.27.0
+	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/mattn/go-runewidth v0.0.23
 	github.com/yuin/goldmark v1.8.2
 )
 
 require (
-	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260525132238-948f4557a654 // indirect
 	github.com/charmbracelet/x/ansi v0.11.7 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect

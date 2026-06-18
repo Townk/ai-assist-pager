@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 func main() {
@@ -42,10 +43,14 @@ func main() {
 	}
 	defer tty.Close()
 
+	// Force TrueColor: zellij's alt-screen pane underreports the color profile
+	// during bubbletea's auto-detection, causing colors to be downsampled.
+	// The UI targets a truecolor Catppuccin terminal, so we pin it explicitly.
 	prog := tea.NewProgram(
 		newModel(harness, md),
 		tea.WithInput(tty),
 		tea.WithOutput(tty),
+		tea.WithColorProfile(colorprofile.TrueColor),
 	)
 	final, err := prog.Run()
 	if err != nil {
