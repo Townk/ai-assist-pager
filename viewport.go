@@ -32,8 +32,8 @@ func Window(lines []Line, xOffset, yOffset, width, height int) []string {
 // hslice returns the display columns [start, start+width) of an ANSI string.
 // It walks the string rune-by-rune, passing SGR/CSI escape sequences through
 // verbatim (they have zero display width) while counting visible columns.
-func hslice(s string, start, end int) string {
-	end = start + end // end is actually width; convert to absolute column limit
+func hslice(s string, start, width int) string {
+	end := start + width
 	var out []byte
 	col := 0 // current display column
 	i := 0
@@ -50,11 +50,9 @@ func hslice(s string, start, end int) string {
 			if i < n {
 				i++ // include final byte
 			}
-			// Only emit escape sequences when we are inside the visible window,
-			// or at its start (to carry open styles into the slice).
-			if col >= start || col < end {
-				out = append(out, s[j:i]...)
-			}
+			// Always emit SGR/CSI escape sequences verbatim: they have zero display
+			// width and thread colour state into (and through) the visible slice.
+			out = append(out, s[j:i]...)
 			continue
 		}
 
