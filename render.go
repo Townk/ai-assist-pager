@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -14,6 +15,28 @@ import (
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
+
+// admon describes one admonition type: display title, nerd-font icon glyph, and
+// palette color. The icon field is easy to tweak per-glyph if the user's font
+// doesn't include a particular codepoint.
+type admon struct {
+	title string
+	icon  string // nerd-font glyph; swap codepoint here if it renders as tofu
+	color string // Catppuccin hex constant
+}
+
+var admonitions = map[string]admon{
+	"note":      {"Note", "󰋽", colBlue},
+	"tip":       {"Tip", "󰌶", colGreen},
+	"important": {"Important", "󰀦", colMauve},
+	"warning":   {"Warning", "󰀪", colPeach},
+	"caution":   {"Caution", "󰳦", colRed},
+}
+
+var defaultAdmon = admon{"Quote", "󱆨", colOverlay0} // dark-gray border + title
+
+// admonMarkerRe matches an optional leading [!TYPE] marker in a block-quote body.
+var admonMarkerRe = regexp.MustCompile(`(?is)^\s*\[!(\w+)\]\s*`)
 
 // strip removes ANSI/CSI escape sequences so callers can measure or assert on
 // the visible text. ESC introduces a sequence; for CSI ("ESC [") it consumes
@@ -393,19 +416,51 @@ func highlight(src, lang string) string {
 	return strings.TrimRight(buf.String(), "\n")
 }
 
-// quote renders a block quote: full-width band, "│ " indent token, prose wraps.
+// quote renders a block quote as a GitHub-style admonition.
+// It collects the child block text, optionally detects a [!TYPE] marker, then
+// emits a colored ▋ border on every line with an icon+title header.
 func (r *renderer) quote(n ast.Node, indent int) {
-	start := len(r.lines)
-	r.block(n, indent) // render children as normal prose first
-	token := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Background(lipgloss.Color(colMantle)).Render("│ ")
-	for i := start; i < len(r.lines); i++ {
-		content := r.lines[i].Text
-		// Pad to full pane width so the band spans the line.
-		w := r.width - lipgloss.Width(token)
+	// Step 1: collect body text from child blocks.
+	var pieces []string
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch c.(type) {
+		case *ast.Paragraph, *ast.TextBlock:
+			pieces = append(pieces, r.inline(c))
+		default:
+			if t := strings.TrimSpace(r.inline(c)); t != "" {
+				pieces = append(pieces, t)
+			}
+		}
+	}
+	body := strings.Join(pieces, "\n")
+
+	// Step 2: detect [!type] marker.
+	a := defaultAdmon
+	if m := admonMarkerRe.FindStringSubmatch(body); m != nil {
+		key := strings.ToLower(m[1])
+		if entry, ok := admonitions[key]; ok {
+			a = entry
+			body = admonMarkerRe.ReplaceAllString(body, "")
+		}
+	}
+
+	// Step 3: build styles.
+	border := lipgloss.NewStyle().Foreground(lipgloss.Color(a.color)).Render("▋")
+	headerText := lipgloss.NewStyle().Foreground(lipgloss.Color(a.color)).Render(a.icon + " " + a.title)
+	bodyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colText)).Italic(true)
+
+	// Step 4: emit lines.
+	r.lines = append(r.lines, Line{Text: border + " " + headerText, Wide: false})
+
+	trimmed := strings.TrimSpace(body)
+	if trimmed != "" {
+		w := r.width - 2
 		if w < 1 {
 			w = 1
 		}
-		padded := lipgloss.NewStyle().Width(w).Background(lipgloss.Color(colMantle)).Foreground(lipgloss.Color(colText)).Render(strip(content))
-		r.lines[i] = Line{Text: token + padded, Wide: false}
+		wrapped := bodyStyle.Width(w).Render(trimmed)
+		for _, ln := range strings.Split(wrapped, "\n") {
+			r.lines = append(r.lines, Line{Text: border + " " + ln, Wide: false})
+		}
 	}
 }

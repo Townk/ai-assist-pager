@@ -125,8 +125,53 @@ func TestRenderBlockQuote(t *testing.T) {
 	if !strings.Contains(got, "hello quote") {
 		t.Fatalf("quote text missing:\n%s", got)
 	}
-	if !strings.Contains(got, "│") {
-		t.Fatalf("quote indent token missing:\n%s", got)
+	if !strings.Contains(got, "▋") {
+		t.Fatalf("quote border glyph missing:\n%s", got)
+	}
+}
+
+func TestRenderQuoteDefaultAdmonition(t *testing.T) {
+	lines := Render("> hello there friend", 40)
+	hdr := strip(lines[0].Text)
+	if !strings.Contains(hdr, "▋") || !strings.Contains(hdr, "Quote") {
+		t.Fatalf("header missing border/title: %q", hdr)
+	}
+	// a body line exists, starts with the border, carries the text
+	foundBody := false
+	for _, l := range lines[1:] {
+		if strings.HasPrefix(strip(l.Text), "▋ ") && strings.Contains(strip(l.Text), "hello") {
+			foundBody = true
+		}
+		if l.Wide {
+			t.Fatalf("quote line should not be Wide")
+		}
+	}
+	if !foundBody {
+		t.Fatalf("no body line found:\n%s", joinText(lines))
+	}
+}
+
+func TestRenderQuoteAdmonitionType(t *testing.T) {
+	lines := Render("> [!note]\n> be careful here", 40)
+	hdr := strip(lines[0].Text)
+	if !strings.Contains(hdr, "Note") {
+		t.Fatalf("expected Note header, got %q", hdr)
+	}
+	body := joinText(lines)
+	if strings.Contains(body, "[!note]") {
+		t.Fatalf("admonition marker leaked into the body:\n%s", body)
+	}
+	if !strings.Contains(body, "be careful here") {
+		t.Fatalf("body text missing:\n%s", body)
+	}
+}
+
+func TestRenderQuoteReflowsToWidth(t *testing.T) {
+	long := "> " + strings.Repeat("word ", 40)
+	for _, l := range Render(long, 30) {
+		if w := lipgloss.Width(l.Text); w > 30 {
+			t.Fatalf("quote line exceeds content width 30 (got %d): %q", w, strip(l.Text))
+		}
 	}
 }
 
