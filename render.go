@@ -450,10 +450,12 @@ func (r *renderer) quote(n ast.Node, indent int) {
 		r.lines = append(r.lines, Line{Text: band(inner, bg, r.width), Wide: false})
 	}
 
-	// Step 6: emit body lines.
+	// Step 6: emit body lines. Wrap to width-3: border (1) + leading space (1) +
+	// text + a reserved trailing column so the background always pads at least one
+	// space past the text on the right (no text touching the band's right edge).
 	trimmed := strings.TrimSpace(body)
 	if trimmed != "" {
-		w := r.width - 2
+		w := r.width - 3
 		if w < 1 {
 			w = 1
 		}
