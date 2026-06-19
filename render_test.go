@@ -330,9 +330,9 @@ func TestRenderCodeBlockLanguageLabel(t *testing.T) {
 		t.Fatal("label line should not be Wide")
 	}
 	got := strip(lines[0].Text)
-	// Right portion ends with " text " (space + lang + space); suffix is "text ".
-	if !strings.HasSuffix(got, "text ") {
-		t.Fatalf("label line %q should end with %q", got, "text ")
+	// The language name must appear in the label region.
+	if !strings.Contains(got, "text") {
+		t.Fatalf("label line %q should contain the language name %q", got, "text")
 	}
 	// Left fill contains the ▂ bar character.
 	if !strings.Contains(got, "▂") {
@@ -379,5 +379,57 @@ func TestRenderCodeBlockBottomBar(t *testing.T) {
 	}
 	if w := lipgloss.Width(last.Text); w != 40 {
 		t.Fatalf("bottom bar line display width = %d, want 40", w)
+	}
+}
+
+func TestIsShellLang(t *testing.T) {
+	for _, s := range []string{"sh", "bash", "zsh", "console", "shell", "shell-session"} {
+		if !isShellLang(s) {
+			t.Fatalf("isShellLang(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"go", "python", ""} {
+		if isShellLang(s) {
+			t.Fatalf("isShellLang(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestCodeBlockButtonsShell(t *testing.T) {
+	_, btns := Render("```sh\nmake all\n```", 40)
+	var play, copyB *Button
+	for i := range btns {
+		switch btns[i].Kind {
+		case "play":
+			play = &btns[i]
+		case "copy":
+			copyB = &btns[i]
+		}
+	}
+	if play == nil || copyB == nil {
+		t.Fatalf("shell block must yield play+copy, got %+v", btns)
+	}
+	if play.Payload != "make all" || copyB.Payload != "make all" {
+		t.Fatalf("payload = %q/%q, want raw source", play.Payload, copyB.Payload)
+	}
+	if play.Width != 2 || copyB.Width != 2 {
+		t.Fatalf("button width must be 2 (glyph+trailing space)")
+	}
+	if !(play.Col < copyB.Col) {
+		t.Fatalf("play must be left of copy: %d vs %d", play.Col, copyB.Col)
+	}
+	if play.Line != copyB.Line {
+		t.Fatalf("both buttons live on the same tab line")
+	}
+}
+
+func TestCodeBlockButtonsNonShell(t *testing.T) {
+	_, btns := Render("```python\nx=1\n```", 40)
+	kinds := map[string]int{}
+	for _, b := range btns {
+		kinds[b.Kind]++
+	}
+	if kinds["copy"] != 1 || kinds["play"] != 0 {
+		t.Fatalf("non-shell block: want exactly 1 copy + 0 play, got %v", kinds)
 	}
 }

@@ -320,10 +320,25 @@ func band(content string, bg string, width int) string {
 	return s + "\x1b[0m"
 }
 
+// isShellLang reports whether a fenced-code language is a shell the run button
+// should appear for. Resolves aliases (sh/bash/zsh/console/shell-session → shell).
+func isShellLang(lang string) bool {
+	key := strings.ToLower(strings.TrimSpace(lang))
+	if canon, ok := langAliases[key]; ok {
+		key = canon
+	}
+	return key == "shell"
+}
+
+const (
+	glyphSep  = "❘"          // U+2758 buttons separator
+	glyphPlay = "⏵"          // U+23F5 run
+	glyphCopy = "\U0010F0C5" // copy
+)
+
 // code renders a (fenced) code block: chroma-highlighted, NOT wrapped, each
 // line padded to the target width with a continuous code background. Wide=true.
-// If the block has a language, a right-aligned language label is emitted first
-// (Wide=false).
+// A decorative tab line (Wide=false) is emitted first: <leading pad><lang><" ❘ "><run? ><copy>.
 func (r *renderer) code(n ast.Node) {
 	var raw strings.Builder
 	lines := n.Lines()
@@ -343,44 +358,70 @@ func (r *renderer) code(n ast.Node) {
 	}
 	width := r.width // content width
 
-	// Top label line: a "tab" shape.
-	// Left portion: ▂ characters in fg colCodeBg (#282C41), no background.
-	// Right portion (when lang != ""): icon glyph in its color (or dim text
-	// fallback) with bg colCodeBg, right-aligned with a trailing space.
-	// Total display width == width. Wide=false.
-	{
-		var topLine string
-		if lang != "" {
-			var styledLabel string
-			var labelCols int
-			if glyph, color, ok := langIcon(lang); ok {
-				// Icon path: leading space + colored glyph + trailing space, on code
-				// bg (mirrors the " lang " padding of the text fallback).
-				bgStyle := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg))
-				rendered := bgStyle.Foreground(lipgloss.Color(color)).Render(glyph)
-				styledLabel = bgStyle.Render(" ") + rendered + bgStyle.Render(" ")
-				// glyph is 1 cell; label region is space(1) + glyph(1) + space(1).
-				labelCols = lipgloss.Width(glyph) + 2
-			} else {
-				// Text fallback: dim " lang " region.
-				labelRegion := " " + lang + " "
-				labelCols = lipgloss.Width(labelRegion)
-				styledLabel = lipgloss.NewStyle().
-					Background(lipgloss.Color(colCodeBg)).
-					Foreground(lipgloss.Color(colOverlay1)).
-					Render(labelRegion)
-			}
-			fillCols := width - labelCols
-			if fillCols < 0 {
-				fillCols = 0
-			}
-			fill := codeFgANSI + strings.Repeat("▂", fillCols) + "\x1b[0m"
-			topLine = fill + styledLabel
-		} else {
-			topLine = codeFgANSI + strings.Repeat("▂", width) + "\x1b[0m"
-		}
-		r.lines = append(r.lines, Line{Text: topLine, Wide: false})
+	// Decorative tab: <leading pad><lang><" ❘ "><run? ><copy>. Each cell on the
+	// code bg. Buttons (run/copy) are the 2-cell <glyph>" " units; record their
+	// columns for mouse/keyboard activation.
+	lineIdx := len(r.lines)
+	bg := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg))
+
+	// Lang part (icon or text label) and its display width.
+	var langPart string
+	var langW int
+	if glyph, color, ok := langIcon(lang); ok && lang != "" {
+		langPart = bg.Foreground(lipgloss.Color(color)).Render(glyph)
+		langW = lipgloss.Width(glyph)
+	} else if lang != "" {
+		langPart = bg.Foreground(lipgloss.Color(colOverlay1)).Render(lang)
+		langW = lipgloss.Width(lang)
+	} else {
+		langPart = "" // no language: no lang part, but separator+buttons still show
+		langW = 0
 	}
+
+	shell := isShellLang(lang)
+	// region width: leadpad(1) + langW + sep(" ❘ "=3) + run(2 if shell) + copy(2)
+	regionW := 1 + langW + 3 + 2
+	if shell {
+		regionW += 2
+	}
+	fillCols := width - regionW
+	if fillCols < 0 {
+		fillCols = 0
+	}
+
+	var sb strings.Builder
+	sb.WriteString(codeFgANSI + strings.Repeat("▂", fillCols) + "\x1b[0m")
+	col := fillCols
+
+	sb.WriteString(bg.Render(" "))
+	col++ // leading pad
+	if langPart != "" {
+		sb.WriteString(langPart)
+		col += langW
+	}
+	// separator " ❘ "
+	sb.WriteString(bg.Render(" "))
+	col++
+	sb.WriteString(bg.Foreground(lipgloss.Color(colSurface0)).Render(glyphSep))
+	col++
+	sb.WriteString(bg.Render(" "))
+	col++
+	if shell {
+		runCol := col
+		sb.WriteString(bg.Foreground(lipgloss.Color(colGreen)).Render(glyphPlay))
+		col++
+		sb.WriteString(bg.Render(" "))
+		col++
+		r.buttons = append(r.buttons, Button{Line: lineIdx, Col: runCol, Width: 2, Kind: "play", Payload: src})
+	}
+	copyCol := col
+	sb.WriteString(bg.Foreground(lipgloss.Color(colYellow)).Render(glyphCopy))
+	col++
+	sb.WriteString(bg.Render(" "))
+	col++
+	r.buttons = append(r.buttons, Button{Line: lineIdx, Col: copyCol, Width: 2, Kind: "copy", Payload: src})
+
+	r.lines = append(r.lines, Line{Text: sb.String(), Wide: false})
 
 	highlighted := highlight(src, lang)
 	hlLines := strings.Split(highlighted, "\n")
