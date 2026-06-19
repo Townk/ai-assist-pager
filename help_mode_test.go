@@ -60,9 +60,8 @@ func TestHelpInnerDims(t *testing.T) {
 	mc := newModel("T", "hi")
 	mc.width, mc.height = 40, 20
 	cw := mc.contentWidth()
-	bodyH := mc.body()
 	capW := cw - 14
-	capH := bodyH - 9
+	capH := mc.height - 9
 	cw2, ch2 := mc.helpInnerDims()
 	if capW > 0 && cw2 > capW {
 		t.Fatalf("medium pane: innerW %d exceeds cap %d", cw2, capW)
@@ -92,8 +91,8 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 		m.width, m.height = d[0], d[1]
 		m.helpMode = true
 		out := m.helpModal()
-		if h := lipgloss.Height(out); h != m.body() {
-			t.Fatalf("%dx%d: modal height %d != body %d", d[0], d[1], h, m.body())
+		if want := m.height - 4; lipgloss.Height(out) != want {
+			t.Fatalf("%dx%d: modal height %d != area %d (H-4)", d[0], d[1], lipgloss.Height(out), want)
 		}
 		for i, line := range strings.Split(out, "\n") {
 			if w := lipgloss.Width(line); w != m.contentWidth() {
@@ -186,7 +185,6 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 	m.width, m.height = 120, 40
 	innerW, innerH := m.helpInnerDims()
 	cw := m.contentWidth()
-	bodyH := m.body()
 
 	// Content-sized: equal to the actual content dimensions.
 	if want := MaxWideWidth(m.helpLines); innerW != want {
@@ -196,12 +194,27 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 		t.Fatalf("innerH %d != content height %d", innerH, want)
 	}
 
-	// Within margin caps.
+	// Within margin caps (cw-14 wide; H-9 tall = modal area H-4 minus chrome 5).
 	if innerW > cw-14 {
 		t.Fatalf("innerW %d exceeds cap cw(%d)-14 = %d", innerW, cw, cw-14)
 	}
-	if innerH > bodyH-9 {
-		t.Fatalf("innerH %d exceeds cap body(%d)-9 = %d", innerH, bodyH, bodyH-9)
+	if innerH > m.height-9 {
+		t.Fatalf("innerH %d exceeds cap H(%d)-9 = %d", innerH, m.height, m.height-9)
+	}
+}
+
+// TestHelpModalNoScrollAt30 pins the rule: the full modal (= len(helpLines)
+// rows of content) fits without scrolling at pane height 30, and scrolls at 29.
+func TestHelpModalNoScrollAt30(t *testing.T) {
+	m := newModel("T", "hi")
+	m.width = 80
+	m.height = 30
+	if _, innerH := m.helpInnerDims(); innerH != len(m.helpLines) {
+		t.Fatalf("H=30 must show all %d help lines (no scroll), got innerH=%d", len(m.helpLines), innerH)
+	}
+	m.height = 29
+	if _, innerH := m.helpInnerDims(); innerH >= len(m.helpLines) {
+		t.Fatalf("H=29 must scroll (innerH < %d), got %d", len(m.helpLines), innerH)
 	}
 }
 
