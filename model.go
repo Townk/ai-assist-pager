@@ -265,12 +265,24 @@ func (m model) header() string {
 		Render(strings.Repeat("▓", 3) + " ai-assist — " + m.harness)
 }
 
-// helpInnerDims is the modal's inner content area (cols x rows) for a pane of
-// width x height: pane minus a ~2-cell outer margin, the border (2), the inner
-// padding (8 horizontal / 4 vertical) and the title row (1). Floored at 1.
-func helpInnerDims(width, height int) (innerW, innerH int) {
-	innerW = width - 4 - 2 - 8  // margin + border + h-padding
-	innerH = height - 4 - 2 - 4 - 1 - 1 // margin + border + v-padding + title + body() offset
+// helpInnerDims returns the modal's inner content area (cols x rows), sized to
+// content and capped by margins. Outer margins: 4 cols, 2 lines. Box overhead:
+// border(2) + padding(4) = 6 wide; border(2) + padding(2) + title(1) = 5 tall.
+// So max inner = cw-14 wide, body()-9 tall. Content-sized: min(content, cap).
+// Both floored at 1.
+func (m model) helpInnerDims() (innerW, innerH int) {
+	cw := m.contentWidth()
+	bodyH := m.body()
+	maxInnerW := cw - 14
+	maxInnerH := bodyH - 9
+	innerW = MaxWideWidth(m.helpLines)
+	if innerW > maxInnerW {
+		innerW = maxInnerW
+	}
+	innerH = len(m.helpLines)
+	if innerH > maxInnerH {
+		innerH = maxInnerH
+	}
 	if innerW < 1 {
 		innerW = 1
 	}
@@ -281,7 +293,7 @@ func helpInnerDims(width, height int) (innerW, innerH int) {
 }
 
 func (m *model) clampHelpScroll() {
-	innerW, innerH := helpInnerDims(m.width, m.height)
+	innerW, innerH := m.helpInnerDims()
 	maxY := len(m.helpLines) - innerH
 	if maxY < 0 {
 		maxY = 0
@@ -313,34 +325,25 @@ func (m model) statusBar() string {
 	return st.Render("\U000F1050: action • \U000F12B7: close • ?: keys")
 }
 
-func helpInnerH(m model) int { _, h := helpInnerDims(m.width, m.height); return h }
-func helpInnerW(m model) int { w, _ := helpInnerDims(m.width, m.height); return w }
+func helpInnerH(m model) int { _, h := m.helpInnerDims(); return h }
+func helpInnerW(m model) int { w, _ := m.helpInnerDims(); return w }
 func helpHalf(m model) int   { if h := helpInnerH(m) / 2; h > 1 { return h }; return 1 }
 func helpPage(m model) int   { if h := helpInnerH(m); h > 1 { return h }; return 1 }
 func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; return 1 }
+
+// mantleBg is the ANSI truecolor background sequence for colMantle, used to
+// band each interior row so the modal background is uniform throughout.
+const mantleBg = "\x1b[48;2;24;24;37m" // #181825 = R24 G24 B37
 
 // helpModal renders the centered keybinding modal over the body region.
 func (m model) helpModal() string {
 	cw := m.contentWidth()
 	bodyW, bodyH := cw, m.body()
-	innerW, innerH := helpInnerDims(m.width, m.height)
-
-	// The box chrome is: border(2) + v-padding(4) + title(1) = 7 rows.
-	// Clamp innerH so the box never overflows bodyH.
-	maxInnerH := bodyH - 7
-	if maxInnerH < 0 {
-		maxInnerH = 0
-	}
-	if innerH > maxInnerH {
-		innerH = maxInnerH
-	}
-	if innerH < 0 {
-		innerH = 0
-	}
+	innerW, innerH := m.helpInnerDims()
 
 	contentW := MaxWideWidth(m.helpLines)
-	needV := innerH > 0 && len(m.helpLines) > innerH
-	needH := innerH > 0 && contentW > innerW
+	needV := len(m.helpLines) > innerH
+	needH := contentW > innerW
 	rowsW := innerW
 	if needV {
 		rowsW -= 2 // vscrollCell returns " " + glyph = 2 display columns
@@ -352,7 +355,7 @@ func (m model) helpModal() string {
 	if rowsW < 1 {
 		rowsW = 1
 	}
-	if rowsH < 1 && innerH > 0 {
+	if rowsH < 1 {
 		rowsH = 1
 	}
 
@@ -364,15 +367,15 @@ func (m model) helpModal() string {
 		if needV {
 			line += vscrollCell(i, vpos, vsize) // " " + glyph
 		}
-		body = append(body, line)
+		// Band with modal bg so every row shares the same background.
+		body = append(body, mantleBg+line+"\x1b[0m")
 	}
 	if needH {
-		// hscrollbarRow renders a code-bg bar; here we just need ─/━ at innerW.
 		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW))
 	}
 
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
-		Render(" Keybindings ")
+		Render("Keybindings")
 	content := title
 	if len(body) > 0 {
 		content += "\n" + strings.Join(body, "\n")
@@ -380,9 +383,10 @@ func (m model) helpModal() string {
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(colMauve)).
-		Background(lipgloss.Color(colSurface0)).
-		Padding(2, 4).
+		BorderForeground(lipgloss.Color(colSurface1)).
+		BorderBackground(lipgloss.Color(colMantle)).
+		Background(lipgloss.Color(colMantle)).
+		Padding(1, 2).
 		Render(content)
 
 	out := lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)

@@ -34,19 +34,25 @@ var helpGroups = []helpGroup{
 }
 
 // buildHelpLines renders the keybinding cheatsheet as Wide lines: a leading
-// blank, then per group a bold header + underline and right-aligned, styled
+// blank, then per group a bold header + underline and /-aligned, styled
 // bindings with a description column, with a blank line between groups.
+// Headers are flush at content col 0; binding lines have a 2-col sub-indent.
 func buildHelpLines() []Line {
-	header := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
 	rule := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colYellow))
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colWhite))
 	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext))
 
-	keyW := 0
+	// Compute max widths of left/right sides of each key split for /-alignment.
+	maxLeftW := 0
+	maxRightW := 0
 	for _, g := range helpGroups {
 		for _, b := range g.binds {
-			if w := lipgloss.Width(b.keys); w > keyW {
-				keyW = w
+			left, right, _ := splitKey(b.keys)
+			if w := lipgloss.Width(left); w > maxLeftW {
+				maxLeftW = w
+			}
+			if w := lipgloss.Width(right); w > maxRightW {
+				maxRightW = w
 			}
 		}
 	}
@@ -58,15 +64,33 @@ func buildHelpLines() []Line {
 		if gi > 0 {
 			add("")
 		}
-		add("  " + header.Render(g.title))
-		add("  " + rule.Render(strings.Repeat("─", lipgloss.Width(g.title))))
+		// Section title color: headingColor(gi+2) → peach/yellow/green.
+		sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headingColor(gi + 2))).Bold(true)
+		add(sectionStyle.Render(g.title))
+		add(rule.Render(strings.Repeat("─", lipgloss.Width(g.title))))
 		for _, b := range g.binds {
-			pad := keyW - lipgloss.Width(b.keys)
-			if pad < 0 {
-				pad = 0
+			left, right, hasSep := splitKey(b.keys)
+			// Right-pad left so all "/" separators align; left-pad right for symmetry.
+			leftPadded := strings.Repeat(" ", maxLeftW-lipgloss.Width(left)) + left
+			var sep string
+			if hasSep {
+				sep = " / "
+			} else {
+				sep = "   "
 			}
-			add("  " + strings.Repeat(" ", pad) + keyStyle.Render(b.keys) + "  " + descStyle.Render(b.desc))
+			rightPadded := right + strings.Repeat(" ", maxRightW-lipgloss.Width(right))
+			keyStr := keyStyle.Render(leftPadded+sep+rightPadded) + "  " + descStyle.Render(b.desc)
+			add("  " + keyStr)
 		}
 	}
 	return out
+}
+
+// splitKey splits a key string on " / " returning left, right, and whether the
+// separator was present. When there is no " / ", right is "" and hasSep is false.
+func splitKey(keys string) (left, right string, hasSep bool) {
+	if i := strings.Index(keys, " / "); i >= 0 {
+		return keys[:i], keys[i+3:], true
+	}
+	return keys, "", false
 }

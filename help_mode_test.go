@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -28,14 +29,46 @@ func TestStatusBarPerMode(t *testing.T) {
 	}
 }
 
+// TestHelpInnerDims tests the method form with content-capped values.
 func TestHelpInnerDims(t *testing.T) {
-	w, h := helpInnerDims(120, 40)
+	// Generous pane: content should fit (no cap hit).
+	m := newModel("T", "hi")
+	m.width, m.height = 120, 40
+	w, h := m.helpInnerDims()
 	if w < 1 || h < 1 {
 		t.Fatalf("generous pane gave non-positive dims: %d x %d", w, h)
 	}
-	w, h = helpInnerDims(8, 5) // tiny pane
-	if w < 1 || h < 1 {
-		t.Fatalf("tiny pane must still give ≥1x1: %d x %d", w, h)
+	// Content fits → dims equal the content size (not the cap).
+	contentW := MaxWideWidth(m.helpLines)
+	contentH := len(m.helpLines)
+	if w != contentW {
+		t.Fatalf("generous pane: innerW %d != contentW %d (should be content-sized)", w, contentW)
+	}
+	if h != contentH {
+		t.Fatalf("generous pane: innerH %d != contentH %d (should be content-sized)", h, contentH)
+	}
+
+	// Tiny pane: both dims should be floored at 1.
+	mt := newModel("T", "hi")
+	mt.width, mt.height = 8, 5
+	tw, th := mt.helpInnerDims()
+	if tw < 1 || th < 1 {
+		t.Fatalf("tiny pane must still give ≥1x1: %d x %d", tw, th)
+	}
+
+	// Medium pane where caps kick in: verify capping math.
+	mc := newModel("T", "hi")
+	mc.width, mc.height = 40, 20
+	cw := mc.contentWidth()
+	bodyH := mc.body()
+	capW := cw - 14
+	capH := bodyH - 9
+	cw2, ch2 := mc.helpInnerDims()
+	if capW > 0 && cw2 > capW {
+		t.Fatalf("medium pane: innerW %d exceeds cap %d", cw2, capW)
+	}
+	if capH > 0 && ch2 > capH {
+		t.Fatalf("medium pane: innerH %d exceeds cap %d", ch2, capH)
 	}
 }
 
@@ -47,7 +80,7 @@ func TestHelpClampScroll(t *testing.T) {
 	if m.helpYOff < 0 || m.helpXOff < 0 {
 		t.Fatal("offsets must not go negative")
 	}
-	_, innerH := helpInnerDims(m.width, m.height)
+	_, innerH := m.helpInnerDims()
 	if max := len(m.helpLines) - innerH; max >= 0 && m.helpYOff > max {
 		t.Fatalf("helpYOff %d exceeds max %d", m.helpYOff, max)
 	}
@@ -115,5 +148,59 @@ func TestHelpTransitions(t *testing.T) {
 		if cm.(model).helpMode {
 			t.Fatalf("%q must close help", k)
 		}
+	}
+}
+
+// TestHelpSlashAlignment verifies that " / " appears at the same column in
+// every binding that contains it (ANSI stripped).
+func TestHelpSlashAlignment(t *testing.T) {
+	lines := buildHelpLines()
+	sepCol := -1
+	for _, l := range lines {
+		plain := strip(l.Text)
+		// Only check binding lines (they have the 2-col indent and a " / ").
+		if !strings.HasPrefix(plain, "  ") {
+			continue
+		}
+		idx := strings.Index(plain, " / ")
+		if idx < 0 {
+			continue
+		}
+		// Use rune count so multi-byte chars measure correctly.
+		col := utf8.RuneCountInString(plain[:idx])
+		if sepCol == -1 {
+			sepCol = col
+		} else if col != sepCol {
+			t.Fatalf("'/ ' not aligned: col %d vs %d in %q", col, sepCol, plain)
+		}
+	}
+	if sepCol == -1 {
+		t.Fatal("no ' / ' found in help lines")
+	}
+}
+
+// TestHelpContentSizeWithinMargins verifies that on a generous pane the box is
+// content-sized and that innerW/innerH are within the margin caps.
+func TestHelpContentSizeWithinMargins(t *testing.T) {
+	m := newModel("T", "hi")
+	m.width, m.height = 120, 40
+	innerW, innerH := m.helpInnerDims()
+	cw := m.contentWidth()
+	bodyH := m.body()
+
+	// Content-sized: equal to the actual content dimensions.
+	if want := MaxWideWidth(m.helpLines); innerW != want {
+		t.Fatalf("innerW %d != content width %d", innerW, want)
+	}
+	if want := len(m.helpLines); innerH != want {
+		t.Fatalf("innerH %d != content height %d", innerH, want)
+	}
+
+	// Within margin caps.
+	if innerW > cw-14 {
+		t.Fatalf("innerW %d exceeds cap cw(%d)-14 = %d", innerW, cw, cw-14)
+	}
+	if innerH > bodyH-9 {
+		t.Fatalf("innerH %d exceeds cap body(%d)-9 = %d", innerH, bodyH, bodyH-9)
 	}
 }

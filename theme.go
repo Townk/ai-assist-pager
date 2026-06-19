@@ -41,11 +41,14 @@ const (
 	colOverlay0 = "#6c7086"
 	colOverlay1 = "#7f849c"
 	colSurface0 = "#313244"
+	colSurface1 = "#45475a" // dark grey — modal border
+	colMantle   = "#181825" // darker panel — modal background
 	colBlue     = "#89b4fa"
 	colGreen    = "#a6e3a1"
 	colPeach    = "#fab387"
 	colRed      = "#f38ba8"
 	colYellow   = "#f9e2af"
+	colWhite    = "#ffffff" // bright white — key bindings
 	colLavender = "#b4befe"
 	colSky      = "#89dceb"
 	colSubtext  = "#9399b2"
