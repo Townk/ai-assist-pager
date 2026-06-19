@@ -247,22 +247,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.MouseWheelMsg:
 		// The wheel scrolls the help modal when it's open, otherwise the document
-		// (a few lines per notch). Ignored in hint mode (a transient selection).
+		// (a few lines/cols per notch). Vertical and horizontal both supported;
+		// ignored in hint mode (a transient selection).
 		const wheelStep = 3
-		var delta int
+		var dx, dy int
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			delta = -wheelStep
+			dy = -wheelStep
 		case tea.MouseWheelDown:
-			delta = wheelStep
+			dy = wheelStep
+		case tea.MouseWheelLeft:
+			dx = -wheelStep
+		case tea.MouseWheelRight:
+			dx = wheelStep
 		default:
 			return m, nil
 		}
 		if m.helpMode {
-			m.helpYOff += delta
+			m.helpYOff += dy
+			m.helpXOff += dx
 			m.clampHelpScroll()
 		} else if !m.hintMode {
-			m.yOff += delta
+			m.yOff += dy
+			m.xOff += dx
 			m.clampScroll()
 		}
 		return m, nil

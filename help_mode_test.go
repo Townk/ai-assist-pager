@@ -442,35 +442,44 @@ func TestHelpModalScrollbarUsesMantle(t *testing.T) {
 	}
 }
 
-// TestMouseWheelScroll verifies the wheel scrolls the document in normal mode
-// and the modal in help mode (and not the document).
+// TestMouseWheelScroll verifies the wheel scrolls the document (both axes) in
+// normal mode and the modal in help mode (and not the document).
 func TestMouseWheelScroll(t *testing.T) {
+	wheel := func(m model, b tea.MouseButton) model {
+		mm, _ := m.Update(tea.MouseWheelMsg{Button: b})
+		return mm.(model)
+	}
 	m := newModel("T", "")
 	m.width, m.height = 80, 10
-	m.md = strings.Repeat("line\n", 100)
+	// A wide code block (horizontal scroll) plus many lines (vertical scroll).
+	m.md = "```\n" + strings.Repeat("y", 200) + "\n```\n\n" + strings.Repeat("line\n", 100)
 	m.reflow()
 	m.follow = false // don't let auto-follow fight the scroll
-	m.yOff = 0
+	m.yOff, m.xOff = 0, 0
 
-	m2, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	m = m2.(model)
-	if m.yOff <= 0 {
+	// Vertical.
+	if m = wheel(m, tea.MouseWheelDown); m.yOff <= 0 {
 		t.Fatalf("wheel down should scroll the document down, yOff=%d", m.yOff)
 	}
-	down := m.yOff
-	m2, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	m = m2.(model)
-	if m.yOff >= down {
-		t.Fatalf("wheel up should scroll back up, yOff=%d (was %d)", m.yOff, down)
+	dy := m.yOff
+	if m = wheel(m, tea.MouseWheelUp); m.yOff >= dy {
+		t.Fatalf("wheel up should scroll back up, yOff=%d (was %d)", m.yOff, dy)
+	}
+
+	// Horizontal.
+	if m = wheel(m, tea.MouseWheelRight); m.xOff <= 0 {
+		t.Fatalf("wheel right should scroll right, xOff=%d", m.xOff)
+	}
+	dx := m.xOff
+	if m = wheel(m, tea.MouseWheelLeft); m.xOff >= dx {
+		t.Fatalf("wheel left should scroll left, xOff=%d (was %d)", m.xOff, dx)
 	}
 
 	// In help mode the wheel scrolls the modal, leaving the document put.
 	m.helpMode = true
 	m.helpLines = append(m.helpLines, make([]Line, 200)...) // ensure scrollable
 	docY := m.yOff
-	m2, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	m = m2.(model)
-	if m.yOff != docY {
+	if m = wheel(m, tea.MouseWheelDown); m.yOff != docY {
 		t.Fatal("wheel in help mode must not move the document")
 	}
 	if m.helpYOff <= 0 {
