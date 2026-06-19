@@ -18,6 +18,20 @@ func (m model) tickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return spinTickMsg{} })
 }
 
+// renderInterval bounds how often streamed text is re-rendered. A stream can
+// deliver many small chunks per second; rather than reflow (parse + highlight
+// the whole accumulated buffer) and repaint on every chunk — which saturates
+// the event loop and stutters — chunks are appended cheaply and a single
+// reflow is coalesced per interval (~30fps).
+const renderInterval = 33 * time.Millisecond
+
+// renderTickMsg flushes any pending streamed text into a reflow.
+type renderTickMsg struct{}
+
+func (m model) renderTickCmd() tea.Cmd {
+	return tea.Tick(renderInterval, func(time.Time) tea.Msg { return renderTickMsg{} })
+}
+
 type model struct {
 	harness    string
 	md         string
@@ -45,6 +59,9 @@ type model struct {
 	follow       bool      // auto-scroll to bottom while streaming
 	reader       io.Reader // input stream source (set by main); nil in tests/static
 	parser       *streamParser
+
+	dirty           bool // streamed text appended since the last reflow
+	renderScheduled bool // a coalesced render tick is already pending
 }
 
 // emitAction appends a record framed as "<kind>US<payload>RS" to the actions
@@ -121,6 +138,21 @@ func (m *model) reflow() {
 	m.clampScroll()
 }
 
+// flushRender re-renders the accumulated stream buffer if any text is pending,
+// pinning the view to the bottom while following. No-op when nothing is dirty,
+// so it's cheap to call from the render tick and on EOF.
+func (m *model) flushRender() {
+	if !m.dirty {
+		return
+	}
+	m.reflow()
+	if m.follow {
+		m.yOff = len(m.lines) // clampScroll caps to the bottom
+		m.clampScroll()
+	}
+	m.dirty = false
+}
+
 func (m *model) clampScroll() {
 	maxY := len(m.lines) - m.body()
 	if maxY < 0 {
@@ -155,7 +187,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, ev := range msg.events {
 			switch e := ev.(type) {
 			case textEvent:
-				m.md += e.text
+				m.md += e.text // cheap append; reflow is coalesced (renderTickMsg)
+				m.dirty = true
 				m.thinking = false
 			case thinkEvent:
 				label := e.label
@@ -171,12 +204,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.thinkLabel = label
 			}
 		}
-		m.reflow()
-		if m.follow {
-			m.yOff = len(m.lines) // clampScroll caps to the bottom
-			m.clampScroll()
-		}
 		if msg.eof {
+			m.flushRender() // render whatever's pending immediately
 			m.streaming = false
 			m.thinking = false
 			return m, nil
@@ -185,7 +214,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if startedThinking {
 			cmds = append(cmds, m.tickCmd())
 		}
+		// Coalesce the (expensive) whole-buffer reflow to renderInterval instead
+		// of reflowing on every chunk. Schedule at most one tick at a time.
+		if m.dirty && !m.renderScheduled {
+			m.renderScheduled = true
+			cmds = append(cmds, m.renderTickCmd())
+		}
 		return m, tea.Batch(cmds...)
+	case renderTickMsg:
+		m.renderScheduled = false
+		m.flushRender()
+		return m, nil
 	case spinTickMsg:
 		if !m.thinking {
 			return m, nil
