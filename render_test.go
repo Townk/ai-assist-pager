@@ -366,6 +366,27 @@ func TestRenderCodeBlockIconLabel(t *testing.T) {
 	}
 }
 
+func TestRenderCodeTabIconAndLabel(t *testing.T) {
+	lines, _ := Render("```rust\nx\n```", 60)
+	var tab string
+	for _, l := range lines {
+		if strings.Contains(strip(l.Text), "❘") { // the tab line has the separator
+			tab = strip(l.Text)
+			break
+		}
+	}
+	if tab == "" {
+		t.Fatal("no tab line found")
+	}
+	if !strings.Contains(tab, "rust") {
+		t.Fatalf("tab should show the language label; got %q", tab)
+	}
+	rustGlyph := langIcons["rust"].glyph
+	if !strings.Contains(tab, rustGlyph) {
+		t.Fatalf("tab should still show the rust icon glyph; got %q", tab)
+	}
+}
+
 func TestRenderCodeBlockBottomBar(t *testing.T) {
 	lines, _ := Render("```go\nx := 1\n```", 40)
 	// last line is the bottom edge bar, Wide=false, filled with 🮂, width == 40.

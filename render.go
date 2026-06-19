@@ -368,8 +368,8 @@ func (r *renderer) code(n ast.Node) {
 	var langPart string
 	var langW int
 	if glyph, color, ok := langIcon(lang); ok && lang != "" {
-		langPart = bg.Foreground(lipgloss.Color(color)).Render(glyph)
-		langW = lipgloss.Width(glyph)
+		langPart = bg.Foreground(lipgloss.Color(color)).Render(glyph + " " + lang)
+		langW = lipgloss.Width(glyph) + 1 + lipgloss.Width(lang)
 	} else if lang != "" {
 		langPart = bg.Foreground(lipgloss.Color(colOverlay1)).Render(lang)
 		langW = lipgloss.Width(lang)
