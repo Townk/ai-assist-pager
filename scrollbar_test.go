@@ -84,13 +84,16 @@ func TestHintCodeRow(t *testing.T) {
 	if strip(got) != "hi    " {
 		t.Fatalf("strip = %q, want %q", strip(got), "hi    ")
 	}
-	if !strings.Contains(got, codeBgANSI) {
+	// lipgloss may emit the bg inside a combined fg+bg SGR, so match the bg
+	// color params (#282C41 → 48;2;40;44;65) rather than the standalone escape.
+	const codeBgParams = "48;2;40;44;65"
+	if !strings.Contains(got, codeBgParams) {
 		t.Fatal("content must paint the code-bg fill")
 	}
 	// Border glyphs (▂ / 🮂) keep their normal color and get NO bg fill, so a
 	// pure border row (the bottom bar) is unchanged.
 	bar := hintCodeRow(strings.Repeat("\U0001FB82", 6), 6)
-	if strings.Contains(bar, codeBgANSI) {
+	if strings.Contains(bar, codeBgParams) {
 		t.Fatal("border glyphs must not get the code-bg fill")
 	}
 	if strip(bar) != strings.Repeat("\U0001FB82", 6) {
