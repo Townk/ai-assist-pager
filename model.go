@@ -385,16 +385,15 @@ func (m model) header() string {
 }
 
 // helpInnerDims returns the modal's inner content area (cols x rows), sized to
-// content and capped to the modal area. The modal area is m.body() lines tall
-// (header+blank+topPad above; bottomPad+statusBar below) by cw wide. Box
-// overhead: border(2)+padding(4)=6 wide; border(2)+padding(2)+title(1)=5 tall.
-// So max inner = cw-14 wide, body()-5 tall. Content-sized: min(content, cap).
-// Both floored at 1.
+// content and capped to the modal area. The modal area is m.height-4 lines tall
+// — a 2-line top margin (blank + title) and a 2-line bottom margin (blank +
+// status bar) — by cw wide. Box overhead: border(2)+padding(4)=6 wide;
+// border(2)+padding(2)+title(1)=5 tall. So max inner = cw-14 wide, (H-4)-5 =
+// H-9 tall. Content-sized: min(content, cap). Both floored at 1.
 func (m model) helpInnerDims() (innerW, innerH int) {
 	cw := m.contentWidth()
-	bodyH := m.body()
 	maxInnerW := cw - 14
-	maxInnerH := bodyH - 5
+	maxInnerH := m.height - 9
 	innerW = MaxWideWidth(m.helpLines)
 	if innerW > maxInnerW {
 		innerW = maxInnerW
@@ -458,9 +457,9 @@ const mantleBg = "\x1b[48;2;24;24;37m" // #181825 = R24 G24 B37
 // helpModal renders the centered keybinding modal over the body region.
 func (m model) helpModal() string {
 	cw := m.contentWidth()
-	// Modal area = m.body() lines: the pager's blank+header+topPad sit above it;
-	// bottomPad+statusBar below. This centers the modal in the body region.
-	bodyW, bodyH := cw, m.body()
+	// Modal area = rows 3..H-2 (m.height-4 lines): a 2-line top margin (blank +
+	// title) above, and bottomPad + status bar below. The box is centered here.
+	bodyW, bodyH := cw, m.height-4
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -583,11 +582,10 @@ func (m model) viewString() string {
 		sb.WriteString("  " + m.statusBar())
 	} else if m.helpMode {
 		sb.WriteString("\n")                     // row 1: blank
-		sb.WriteString("  " + m.header() + "\n") // row 2: title
-		sb.WriteString("\n")                     // row 3: blank (top pad)
-		sb.WriteString(m.helpModal())            // rows 4..H-2: modal area = m.body() rows
+		sb.WriteString("  " + m.header() + "\n") // row 2: title (2-line top margin)
+		sb.WriteString(m.helpModal())            // rows 3..H-2: modal area = m.height-4 rows
 		sb.WriteString("\n")                     // end the modal's last line
-		sb.WriteString("\n")                     // bottom pad
+		sb.WriteString("\n")                     // bottom pad (row H-1)
 		sb.WriteString("  " + m.statusBar())     // row H: status bar
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())

@@ -61,7 +61,7 @@ func TestHelpInnerDims(t *testing.T) {
 	mc.width, mc.height = 40, 20
 	cw := mc.contentWidth()
 	capW := cw - 14
-	capH := mc.body() - 5
+	capH := mc.height - 9
 	cw2, ch2 := mc.helpInnerDims()
 	if capW > 0 && cw2 > capW {
 		t.Fatalf("medium pane: innerW %d exceeds cap %d", cw2, capW)
@@ -91,8 +91,8 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 		m.width, m.height = d[0], d[1]
 		m.helpMode = true
 		out := m.helpModal()
-		if want := m.body(); lipgloss.Height(out) != want {
-			t.Fatalf("%dx%d: modal height %d != area %d (body)", d[0], d[1], lipgloss.Height(out), want)
+		if want := m.height - 4; lipgloss.Height(out) != want {
+			t.Fatalf("%dx%d: modal height %d != area %d (H-4)", d[0], d[1], lipgloss.Height(out), want)
 		}
 		for i, line := range strings.Split(out, "\n") {
 			if w := lipgloss.Width(line); w != m.contentWidth() {
@@ -344,33 +344,31 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 		t.Fatalf("innerH %d != content height %d", innerH, want)
 	}
 
-	// Within margin caps (cw-14 wide; body()-5 tall = modal area body() minus chrome 5).
+	// Within margin caps (cw-14 wide; H-9 tall = modal area H-4 minus chrome 5).
 	if innerW > cw-14 {
 		t.Fatalf("innerW %d exceeds cap cw(%d)-14 = %d", innerW, cw, cw-14)
 	}
-	if innerH > m.body()-5 {
-		t.Fatalf("innerH %d exceeds cap body(%d)-5 = %d", innerH, m.body(), m.body()-5)
+	if innerH > m.height-9 {
+		t.Fatalf("innerH %d exceeds cap H(%d)-9 = %d", innerH, m.height, m.height-9)
 	}
 }
 
 // TestHelpModalScrollThreshold pins the rule: the modal fits without scrolling
-// exactly when m.body() >= len(helpLines)+5 (box chrome = border 2 + padding 2 + title 1).
-// Find the smallest height that satisfies it, verify no-scroll; one row shorter, verify scroll.
+// exactly when m.height-9 >= len(helpLines), i.e. the modal area (H-4) minus the
+// box chrome (border 2 + padding 2 + title 1) holds the whole cheatsheet.
 func TestHelpModalScrollThreshold(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width = 80
-	// The modal fits without scrolling exactly when m.body() >= len(helpLines)+5
-	// (box chrome = border 2 + padding 2 + title 1). Find the smallest height
-	// that satisfies it.
+	// Smallest height where the full cheatsheet fits without scrolling.
 	m.height = 24
-	for ; m.body() < len(m.helpLines)+5; m.height++ {
+	for ; m.height-9 < len(m.helpLines); m.height++ {
 	}
 	if _, innerH := m.helpInnerDims(); innerH != len(m.helpLines) {
-		t.Fatalf("at H=%d (body=%d) modal should not scroll, innerH=%d want %d", m.height, m.body(), innerH, len(m.helpLines))
+		t.Fatalf("at H=%d modal should not scroll, innerH=%d want %d", m.height, innerH, len(m.helpLines))
 	}
 	m.height--
 	if _, innerH := m.helpInnerDims(); innerH >= len(m.helpLines) {
-		t.Fatalf("at H=%d (body=%d) modal should scroll, innerH=%d", m.height, m.body(), innerH)
+		t.Fatalf("at H=%d modal should scroll, innerH=%d", m.height, innerH)
 	}
 }
 
