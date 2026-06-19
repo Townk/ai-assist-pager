@@ -454,3 +454,50 @@ func TestCodeBlockButtonsNonShell(t *testing.T) {
 		t.Fatalf("non-shell block: want exactly 1 copy + 0 play, got %v", kinds)
 	}
 }
+
+func TestCodeBlockLineMarkers(t *testing.T) {
+	// Narrow content: no horizontal overflow → no HBar row.
+	lines, _ := Render("```go\nx := 1\n```", 40)
+	codeCount, hbar := 0, 0
+	for _, l := range lines {
+		if l.Code {
+			codeCount++
+		}
+		if l.HBar > 0 {
+			hbar++
+		}
+	}
+	if codeCount < 3 { // tab + ≥1 body + bottom bar
+		t.Fatalf("expected ≥3 Code-tagged lines, got %d", codeCount)
+	}
+	if hbar != 0 {
+		t.Fatalf("narrow block must not emit an HBar row, got %d", hbar)
+	}
+}
+
+func TestCodeBlockHBarOnOverflow(t *testing.T) {
+	long := "xy " + strings.Repeat("z", 200)
+	lines, _ := Render("```go\n"+long+"\n```", 40)
+	hbarIdx := -1
+	for i, l := range lines {
+		if l.HBar > 0 {
+			if hbarIdx != -1 {
+				t.Fatal("expected exactly one HBar row")
+			}
+			hbarIdx = i
+			if !l.Code {
+				t.Fatal("HBar row must be Code-tagged")
+			}
+			if l.HBar <= 40 {
+				t.Fatalf("HBar width should be the block width (>40), got %d", l.HBar)
+			}
+		}
+	}
+	if hbarIdx == -1 {
+		t.Fatal("overflowing block must emit an HBar row")
+	}
+	// It sits between the last body line and the bottom bar (the next line is the bar).
+	if hbarIdx+1 >= len(lines) || lines[hbarIdx].Wide {
+		t.Fatal("HBar row should be a non-Wide row before the bottom bar")
+	}
+}

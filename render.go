@@ -421,19 +421,28 @@ func (r *renderer) code(n ast.Node) {
 	col++
 	r.buttons = append(r.buttons, Button{Line: lineIdx, Col: copyCol, Width: 2, Kind: "copy", Payload: src})
 
-	r.lines = append(r.lines, Line{Text: sb.String(), Wide: false})
+	r.lines = append(r.lines, Line{Text: sb.String(), Wide: false, Code: true})
 
 	highlighted := highlight(src, lang)
 	hlLines := strings.Split(highlighted, "\n")
-
+	blockW := 0
 	for _, hl := range hlLines {
-		r.lines = append(r.lines, Line{Text: " " + hl + " ", Wide: true, Bg: codeBgANSI})
+		body := " " + hl + " "
+		r.lines = append(r.lines, Line{Text: body, Wide: true, Bg: codeBgANSI, Code: true})
+		if w := lipgloss.Width(body); w > blockW {
+			blockW = w
+		}
+	}
+
+	// Horizontal scrollbar row when the block is wider than the viewport.
+	if blockW > width {
+		r.lines = append(r.lines, Line{Wide: false, HBar: blockW, Code: true})
 	}
 
 	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.
 	// Total display width == width. Wide=false.
 	bottomLine := codeFgANSI + strings.Repeat("🮂", width) + "\x1b[0m"
-	r.lines = append(r.lines, Line{Text: bottomLine, Wide: false})
+	r.lines = append(r.lines, Line{Text: bottomLine, Wide: false, Code: true})
 }
 
 // highlight runs chroma over src; on any failure it returns src unchanged.
