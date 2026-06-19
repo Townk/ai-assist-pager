@@ -135,8 +135,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Leader: Space enters hint mode over the visible buttons.
-		if msg.String() == " " {
+		// Leader: Space enters hint mode over the visible buttons. bubbletea v2
+		// (ultraviolet) reports the space key as "space", not " ".
+		if s := msg.String(); s == "space" || s == " " {
 			var visible []Button
 			for _, b := range m.buttons {
 				if b.Line >= m.yOff && b.Line < m.yOff+m.body() {

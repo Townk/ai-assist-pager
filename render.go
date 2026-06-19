@@ -402,7 +402,7 @@ func (r *renderer) code(n ast.Node) {
 	// separator " ❘ "
 	sb.WriteString(bg.Render(" "))
 	col++
-	sb.WriteString(bg.Foreground(lipgloss.Color(colSurface0)).Render(glyphSep))
+	sb.WriteString(bg.Foreground(lipgloss.Color(colOverlay0)).Render(glyphSep))
 	col++
 	sb.WriteString(bg.Render(" "))
 	col++
