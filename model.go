@@ -556,12 +556,30 @@ func (m model) viewString() string {
 		sb.WriteString("\n")
 		sb.WriteString("  " + m.header() + "\n")
 		sb.WriteString("\n")
-		for i, row := range rows {
-			idx := m.yOff + i
-			if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
-				row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw, colCodeBg)
+		spinRow := -1
+		if m.thinking {
+			// Spinner sits just below the last visible content line (or the first
+			// body row when empty), within the body region.
+			spinRow = len(rows)
+			if spinRow >= m.body() {
+				spinRow = m.body() - 1
 			}
-			sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
+		}
+		for i := 0; i < m.body(); i++ {
+			if i == spinRow {
+				sb.WriteString("  " + padTo(spinnerLine(m.spinFrame, m.thinkLabel, m.spinTicks/10), cw) + "\n")
+				continue
+			}
+			if i < len(rows) {
+				row := rows[i]
+				idx := m.yOff + i
+				if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
+					row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw, colCodeBg)
+				}
+				sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
+			} else {
+				sb.WriteString("\n")
+			}
 		}
 		sb.WriteString("\n")
 		sb.WriteString("  " + m.statusBar())
