@@ -221,47 +221,102 @@ func (m model) hint() string {
 		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit  Space hints")
 }
 
-// hintLegend builds the compact legend shown at the bottom when hint mode is
-// active, e.g. "[a] play  [s] copy  [d] play". The alphabet order is preserved
-// by iterating hintAlphabet rather than the map.
-func (m model) hintLegend() string {
-	labelStyle := lipgloss.NewStyle().Bold(true).
-		Foreground(lipgloss.Color(colBase)).
-		Background(lipgloss.Color(colYellow))
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
-	var parts []string
-	for _, ch := range hintAlphabet {
-		label := string(ch)
-		if b, ok := m.hintLabels[label]; ok {
-			parts = append(parts, labelStyle.Render(label)+" "+keyStyle.Render(b.Kind))
+// hintRow renders one body row for hint mode: the plain (already ANSI-stripped)
+// text dimmed to dim, with label chars overlaid at their display columns
+// (labels[col] = label) in the lab standout style. The row is padded to width.
+// Column == rune index here (label rows are blank/space above a tab, so this is
+// exact for the common case).
+func hintRow(plain string, labels map[int]string, width int, dim, lab lipgloss.Style) string {
+	runes := []rune(plain)
+	for len(runes) < width {
+		runes = append(runes, ' ')
+	}
+	if len(runes) > width {
+		runes = runes[:width]
+	}
+	var sb strings.Builder
+	var run []rune
+	flush := func() {
+		if len(run) > 0 {
+			sb.WriteString(dim.Render(string(run)))
+			run = run[:0]
 		}
 	}
-	prefix := lipgloss.NewStyle().Foreground(lipgloss.Color(colYellow)).Bold(true).Render("HINT ")
-	return prefix + strings.Join(parts, keyStyle.Render("  "))
+	for i, r := range runes {
+		if lbl, ok := labels[i]; ok {
+			flush()
+			sb.WriteString(lab.Render(lbl))
+		} else {
+			run = append(run, r)
+		}
+	}
+	flush()
+	return sb.String()
 }
 
 func (m model) View() tea.View {
 	cw := m.contentWidth()
-	rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
 	var sb strings.Builder
-	// Empty line before the title.
-	sb.WriteString("\n")
-	// Header (left-padded)
-	sb.WriteString("  " + m.header() + "\n")
-	// Top padding blank
-	sb.WriteString("\n")
-	// Rows 3..H-2: body (each left-padded)
-	for _, row := range rows {
-		sb.WriteString("  " + row + "\n")
-	}
-	// Row H-1: bottom padding blank
-	sb.WriteString("\n")
-	// Row H: hint (left-padded); replaced by legend when hint mode is active.
+
 	if m.hintMode {
-		sb.WriteString("  " + m.hintLegend())
+		// Flash.nvim-style in-place overlay: dim all body rows, float each label
+		// char on the line directly above its button (fallback: same line when
+		// the line above is scrolled off the top of the viewport).
+
+		// Build labelsByRow: lineIdx → col → label.
+		labelsByRow := map[int]map[int]string{}
+		for label, b := range m.hintLabels {
+			row := b.Line - 1
+			if row < m.yOff {
+				row = b.Line
+			}
+			if labelsByRow[row] == nil {
+				labelsByRow[row] = map[int]string{}
+			}
+			labelsByRow[row][b.Col] = label
+		}
+
+		dim := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
+		lab := lipgloss.NewStyle().Bold(true).
+			Foreground(lipgloss.Color(colBase)).
+			Background(lipgloss.Color(colMauve))
+
+		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
+
+		// Empty line before the title.
+		sb.WriteString("\n")
+		// Header (left-padded, not dimmed).
+		sb.WriteString("  " + m.header() + "\n")
+		// Top padding blank.
+		sb.WriteString("\n")
+		// Body rows: dim + overlay labels.
+		for i, row := range rows {
+			lineIdx := m.yOff + i
+			plain := strip(row)
+			sb.WriteString("  " + hintRow(plain, labelsByRow[lineIdx], cw, dim, lab) + "\n")
+		}
+		// Bottom padding blank.
+		sb.WriteString("\n")
+		// Bottom prompt (dim).
+		sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("press a label • Esc cancel"))
 	} else {
+		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
+		// Empty line before the title.
+		sb.WriteString("\n")
+		// Header (left-padded)
+		sb.WriteString("  " + m.header() + "\n")
+		// Top padding blank
+		sb.WriteString("\n")
+		// Rows 3..H-2: body (each left-padded)
+		for _, row := range rows {
+			sb.WriteString("  " + row + "\n")
+		}
+		// Row H-1: bottom padding blank
+		sb.WriteString("\n")
+		// Row H: hint (left-padded).
 		sb.WriteString("  " + m.hint())
 	}
+
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
