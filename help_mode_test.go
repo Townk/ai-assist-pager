@@ -57,13 +57,12 @@ func TestHelpTextDims(t *testing.T) {
 		t.Fatalf("tiny pane must still give ≥1x1: %d x %d", tw, th)
 	}
 
-	// Medium pane where caps kick in: text width within cw-14 (minus the vbar
+	// Medium pane where caps kick in: text width within width-14 (minus the vbar
 	// column when shown), text height within m.height-8.
 	mc := newModel("T", "hi")
 	mc.width, mc.height = 40, 20
-	cw := mc.contentWidth()
 	tw2, th2, nV, _ := mc.helpTextDims()
-	if capW := cw - 14 - boolToInt(nV); capW > 0 && tw2 > capW {
+	if capW := mc.width - 14 - boolToInt(nV); capW > 0 && tw2 > capW {
 		t.Fatalf("medium pane: textW %d exceeds cap %d", tw2, capW)
 	}
 	if capH := mc.height - 8; capH > 0 && th2 > capH {
@@ -102,8 +101,8 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 			t.Fatalf("%dx%d: modal height %d != area %d (H-4)", d[0], d[1], lipgloss.Height(out), want)
 		}
 		for i, line := range strings.Split(out, "\n") {
-			if w := lipgloss.Width(line); w != m.contentWidth() {
-				t.Fatalf("%dx%d: line %d width %d != cw %d", d[0], d[1], i, w, m.contentWidth())
+			if w := lipgloss.Width(line); w != m.width {
+				t.Fatalf("%dx%d: line %d width %d != pane width %d", d[0], d[1], i, w, m.width)
 			}
 		}
 	}
@@ -354,7 +353,6 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width, m.height = 120, 40
 	textW, textH, _, _ := m.helpTextDims()
-	cw := m.contentWidth()
 
 	// Content-sized: equal to the actual content dimensions.
 	if want := MaxWideWidth(m.helpLines); textW != want {
@@ -364,9 +362,9 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 		t.Fatalf("textH %d != content height %d", textH, want)
 	}
 
-	// Within margin caps (cw-14 wide; H-8 tall = modal area H-4 minus chrome 4).
-	if textW > cw-14 {
-		t.Fatalf("textW %d exceeds cap cw(%d)-14 = %d", textW, cw, cw-14)
+	// Within margin caps (width-14 wide; H-8 tall = modal area H-4 minus chrome 4).
+	if textW > m.width-14 {
+		t.Fatalf("textW %d exceeds cap width(%d)-14 = %d", textW, m.width, m.width-14)
 	}
 	if textH > m.height-8 {
 		t.Fatalf("textH %d exceeds cap H(%d)-8 = %d", textH, m.height, m.height-8)

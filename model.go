@@ -395,13 +395,13 @@ func bi(b bool) int {
 // whether each scrollbar is shown. The title now scrolls with the content
 // (m.helpLines includes it), so the modal area (m.height-4) holds, top to
 // bottom: border(1) + padTop(1) + text rows + padBottom(1) + border(1) = text+4.
-// Horizontally the box is capped to cw-8 (4-col margins) and laid out as
-// border(1) + leftPad(2) + text + gap(2) + vbar(needV?1:0) + border(1): the bar
-// sits flush against the right border with a 2-col gap from the text, so the
-// text budget is cw-14, minus one more column when the vbar is shown. The
+// Horizontally the box is capped to width-8 — the modal is centered in the full
+// pane width with a 4-col margin on each side (mirroring the vertical) — and laid
+// out as border(1) + leftPad(2) + text + gap(2) + vbar(needV?1:0) + border(1):
+// the bar sits flush against the right border with a 2-col gap from the text, so
+// the text budget is width-14, minus one more column when the vbar is shown. The
 // horizontal bar (when needH) takes one text row. All dims floored at 1.
 func (m model) helpTextDims() (textW, textH int, needV, needH bool) {
-	cw := m.contentWidth()
 	contentMaxW := MaxWideWidth(m.helpLines)
 	maxRows := m.height - 8
 	if maxRows < 1 {
@@ -415,7 +415,7 @@ func (m model) helpTextDims() (textW, textH int, needV, needH bool) {
 			available = 1
 		}
 		needV = len(m.helpLines) > available
-		maxTextW := cw - 14 - bi(needV)
+		maxTextW := m.width - 14 - bi(needV)
 		if maxTextW < 1 {
 			maxTextW = 1
 		}
@@ -429,7 +429,7 @@ func (m model) helpTextDims() (textW, textH int, needV, needH bool) {
 	if textH < 1 {
 		textH = 1
 	}
-	textW = cw - 14 - bi(needV)
+	textW = m.width - 14 - bi(needV)
 	if textW > contentMaxW {
 		textW = contentMaxW
 	}
@@ -484,10 +484,11 @@ const mantleBg = "\x1b[48;2;24;24;37m" // #181825 = R24 G24 B37
 
 // helpModal renders the centered keybinding modal over the body region.
 func (m model) helpModal() string {
-	cw := m.contentWidth()
-	// Modal area = rows 3..H-2 (m.height-4 lines): a 2-line top margin (blank +
-	// title) above, and bottomPad + status bar below. The box is centered here.
-	bodyW, bodyH := cw, m.height-4
+	// Placement area = the full pane width × the modal area (m.height-4 rows: a
+	// 2-line top margin of blank + title above, bottomPad + status bar below). The
+	// box is content-sized, capped to width-8 / area, and centered here — so it
+	// gets a 4-col margin on each side and a >=2-line margin top/bottom.
+	bodyW, bodyH := m.width, m.height-4
 	if bodyH < 1 {
 		bodyH = 1
 	}
