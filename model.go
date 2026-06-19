@@ -558,16 +558,22 @@ func (m model) viewString() string {
 		sb.WriteString("\n")
 		spinRow := -1
 		if m.thinking {
-			// Spinner sits just below the last visible content line (or the first
-			// body row when empty), within the body region.
-			spinRow = len(rows)
-			if spinRow >= m.body() {
+			// Spinner sits just below the last real content line visible from the
+			// top of the body (or the first body row when empty), within the body
+			// region. len(m.lines)-m.yOff gives the number of real content rows
+			// still ahead of the viewport top; that is the row index right after
+			// the last visible content line.
+			spinRow = len(m.lines) - m.yOff
+			if spinRow < 0 {
+				spinRow = 0
+			}
+			if spinRow > m.body()-1 {
 				spinRow = m.body() - 1
 			}
 		}
 		for i := 0; i < m.body(); i++ {
 			if i == spinRow {
-				sb.WriteString("  " + padTo(spinnerLine(m.spinFrame, m.thinkLabel, m.spinTicks/10), cw) + "\n")
+				sb.WriteString("  " + padTo(spinnerLine(m.spinFrame, m.thinkLabel, m.spinTicks/10), cw) + vscrollCell(spinRow, pos, size) + "\n")
 				continue
 			}
 			if i < len(rows) {

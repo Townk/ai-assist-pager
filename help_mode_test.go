@@ -123,6 +123,156 @@ func TestViewHeightAllModes(t *testing.T) {
 	}
 }
 
+// TestViewThinkingMode verifies the three spinner-view invariants:
+//
+//	(a) total view height equals m.height (frame discipline)
+//	(b) every rendered body line has equal display width (I-2: scrollbar alignment)
+//	(c) with empty content the spinner appears within the first body row, not
+//	    pinned to the bottom (I-1: position under last real content line)
+func TestViewThinkingMode(t *testing.T) {
+	dims := [][2]int{{80, 24}, {50, 18}, {120, 40}}
+
+	t.Run("height_invariant", func(t *testing.T) {
+		for _, d := range dims {
+			for _, tc := range []struct {
+				name string
+				md   string
+			}{
+				{"empty", ""},
+				{"short", "hello\nworld"},
+				{"overflow", strings.Repeat("line\n", 100)},
+			} {
+				m := newModel("T", tc.md)
+				m.width, m.height = d[0], d[1]
+				m.thinking = true
+				m.thinkLabel = "Working…"
+				m.spinTicks = 15 // 1s
+				m.reflow()
+				if tc.md == "overflow" {
+					// Simulate follow: scroll to bottom.
+					m.yOff = len(m.lines)
+					m.clampScroll()
+				}
+				got := m.viewString()
+				if h := lipgloss.Height(got); h != m.height {
+					t.Errorf("%dx%d thinking/%s: View height %d != %d", d[0], d[1], tc.name, h, m.height)
+				}
+			}
+		}
+	})
+
+	t.Run("uniform_body_width", func(t *testing.T) {
+		// Use content that triggers a vertical scrollbar (overflow), which is the
+		// scenario where I-2 manifests: content rows get vscrollCell but the
+		// spinner row was missing it, making it 2 columns narrower.
+		for _, d := range dims {
+			m := newModel("T", strings.Repeat("line\n", 100))
+			m.width, m.height = d[0], d[1]
+			m.thinking = true
+			m.thinkLabel = "Working…"
+			m.reflow()
+			m.yOff = len(m.lines)
+			m.clampScroll()
+			got := m.viewString()
+			lines := strings.Split(got, "\n")
+			// Skip the leading blank, header, top-pad, bottom-pad, and status bar
+			// (the last two non-body lines). Body rows are lines[3 : 3+m.body()].
+			bodyStart := 3
+			bodyEnd := bodyStart + m.body()
+			if bodyEnd > len(lines) {
+				t.Fatalf("%dx%d: not enough lines in view (%d), want at least %d", d[0], d[1], len(lines), bodyEnd)
+			}
+			bodyLines := lines[bodyStart:bodyEnd]
+			if len(bodyLines) == 0 {
+				t.Fatalf("%dx%d: no body lines", d[0], d[1])
+			}
+			wantW := lipgloss.Width(bodyLines[0])
+			for i, l := range bodyLines {
+				if w := lipgloss.Width(l); w != wantW {
+					t.Errorf("%dx%d: body line %d width %d != %d (line 0 width); spinner may be missing vscrollCell", d[0], d[1], i, w, wantW)
+				}
+			}
+		}
+	})
+
+	t.Run("spinner_position_empty_content", func(t *testing.T) {
+		// With no content the spinner should appear at body row 0 (just under the
+		// title), NOT at the bottom row (m.body()-1). I-1 caused it to always pin
+		// to the bottom because Window() right-pads and len(rows)==m.body() always.
+		m := newModel("T", "")
+		m.width, m.height = 80, 24
+		m.thinking = true
+		m.thinkLabel = "Working…"
+		m.spinTicks = 0
+		m.reflow()
+		got := m.viewString()
+		lines := strings.Split(got, "\n")
+		bodyStart := 3
+		bodyEnd := bodyStart + m.body()
+		if bodyEnd > len(lines) {
+			t.Fatalf("not enough lines in view (%d)", len(lines))
+		}
+		bodyLines := lines[bodyStart:bodyEnd]
+		// The spinner text "⠋" (first frame) and "0s" should appear in one of
+		// the first 2 body rows (row 0 = right under header), NOT only at the
+		// last body row.
+		spinnerFound := -1
+		for i, l := range bodyLines {
+			if strings.Contains(strip(l), "0s") {
+				spinnerFound = i
+				break
+			}
+		}
+		if spinnerFound < 0 {
+			t.Fatal("spinner text not found in body")
+		}
+		lastRow := m.body() - 1
+		if spinnerFound == lastRow && lastRow > 1 {
+			t.Errorf("spinner pinned to bottom row %d; want it at row 0 (just under title) for empty content", lastRow)
+		}
+		if spinnerFound != 0 {
+			t.Errorf("empty content: spinner at body row %d, want 0", spinnerFound)
+		}
+	})
+
+	t.Run("spinner_position_short_content", func(t *testing.T) {
+		// With 2 lines of content (short, no overflow), spinner should appear at
+		// body row 2 (just below the last content line), not at the bottom.
+		m := newModel("T", "line1\nline2")
+		m.width, m.height = 80, 24
+		m.thinking = true
+		m.thinkLabel = "Working…"
+		m.reflow()
+		got := m.viewString()
+		lines := strings.Split(got, "\n")
+		bodyStart := 3
+		bodyEnd := bodyStart + m.body()
+		if bodyEnd > len(lines) {
+			t.Fatalf("not enough lines in view (%d)", len(lines))
+		}
+		bodyLines := lines[bodyStart:bodyEnd]
+		spinnerFound := -1
+		for i, l := range bodyLines {
+			if strings.Contains(strip(l), "Working…") {
+				spinnerFound = i
+				break
+			}
+		}
+		if spinnerFound < 0 {
+			t.Fatal("spinner text not found in body")
+		}
+		// With 2 lines of content, spinner should be at body row 2 (0-indexed).
+		wantRow := len(m.lines)
+		lastRow := m.body() - 1
+		if spinnerFound == lastRow && lastRow > wantRow {
+			t.Errorf("spinner pinned to bottom row %d; want row %d (just below last content line)", lastRow, wantRow)
+		}
+		if spinnerFound != wantRow {
+			t.Errorf("short content: spinner at body row %d, want %d", spinnerFound, wantRow)
+		}
+	})
+}
+
 func TestHelpTransitions(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width, m.height = 80, 24

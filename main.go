@@ -79,6 +79,7 @@ func main() {
 	m := newModel(harness, "")
 	m.fifoPath = fifoPath
 	m.defaultLabel = thinkingLabel
+	m.thinkLabel = thinkingLabel
 	m.thinking = true // implicit thinking at launch (spec)
 	m.streaming = true
 	m.reader = bufio.NewReader(src)
