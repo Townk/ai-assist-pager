@@ -491,15 +491,17 @@ func (m model) helpModal() string {
 		if needV {
 			line += vscrollCell(i, vpos, vsize) // " " + glyph
 		}
-		// Band with modal bg so every row shares the same background.
-		body = append(body, mantleBg+line+"\x1b[0m")
+		// band re-injects the modal bg after every inner color reset, so plain
+		// gaps and reset segments keep the modal background instead of the
+		// terminal's (a bare mantleBg prefix is cleared by each segment's reset).
+		body = append(body, band(line, mantleBg, 0))
 	}
 	if needH {
 		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW, colMantle))
 	}
 
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
-		Render("Keybindings")
+	title := band(lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
+		Render("Keybindings"), mantleBg, 0)
 	content := title
 	if len(body) > 0 {
 		content += "\n" + strings.Join(body, "\n")

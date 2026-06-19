@@ -307,10 +307,9 @@ func TestHelpSlashAlignment(t *testing.T) {
 	sepCol := -1
 	for _, l := range lines {
 		plain := strip(l.Text)
-		// Only check binding lines (they have the 2-col indent and a " / ").
-		if !strings.HasPrefix(plain, "  ") {
-			continue
-		}
+		// Binding lines are the only ones containing " / "; its first occurrence
+		// is the key separator (the key column is left of the description). No
+		// indent gate — bindings now align at the content's left edge.
 		idx := strings.Index(plain, " / ")
 		if idx < 0 {
 			continue
@@ -325,6 +324,20 @@ func TestHelpSlashAlignment(t *testing.T) {
 	}
 	if sepCol == -1 {
 		t.Fatal("no ' / ' found in help lines")
+	}
+}
+
+// TestBandReinjectsBg guards the mechanism the modal uses for a uniform
+// background: band must prefix the bg and re-apply it after every color reset,
+// so styled segments don't leave gaps on the terminal's default background.
+func TestBandReinjectsBg(t *testing.T) {
+	bg := "\x1b[48;2;1;2;3m"
+	got := band("\x1b[38;2;9;9;9mfg\x1b[0m plain", bg, 0)
+	if !strings.HasPrefix(got, bg) {
+		t.Fatal("band must prefix the bg")
+	}
+	if !strings.Contains(got, "\x1b[0m"+bg) {
+		t.Fatal("band must re-inject the bg after each reset")
 	}
 }
 

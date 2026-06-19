@@ -64,8 +64,9 @@ func buildHelpLines() []Line {
 		if gi > 0 {
 			add("")
 		}
-		// Section title color: headingColor(gi+2) → peach/yellow/green.
-		sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headingColor(gi + 2))).Bold(true)
+		// All section titles share one color (headingColor(2) = colPeach) — they
+		// are all the same "level" under the colMauve modal title.
+		sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headingColor(2))).Bold(true)
 		add(sectionStyle.Render(g.title))
 		add(rule.Render(strings.Repeat("─", lipgloss.Width(g.title))))
 		for _, b := range g.binds {
@@ -79,8 +80,9 @@ func buildHelpLines() []Line {
 				sep = "   "
 			}
 			rightPadded := right + strings.Repeat(" ", maxRightW-lipgloss.Width(right))
-			keyStr := keyStyle.Render(leftPadded+sep+rightPadded) + "  " + descStyle.Render(b.desc)
-			add("  " + keyStr)
+			// No sub-indent: the widest binding's leftmost symbol aligns with the
+			// modal title and the section headers (all at the content's left edge).
+			add(keyStyle.Render(leftPadded+sep+rightPadded) + "  " + descStyle.Render(b.desc))
 		}
 	}
 	return out
