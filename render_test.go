@@ -473,6 +473,16 @@ func TestCodeBlockLineMarkers(t *testing.T) {
 	if hbar != 0 {
 		t.Fatalf("narrow block must not emit an HBar row, got %d", hbar)
 	}
+	// A non-overflowing block keeps its 🮂 bottom bar.
+	hasBottom := false
+	for _, l := range lines {
+		if strings.Contains(l.Text, "🮂") {
+			hasBottom = true
+		}
+	}
+	if !hasBottom {
+		t.Fatal("non-overflowing block must keep the 🮂 bottom bar")
+	}
 }
 
 func TestCodeBlockHBarOnOverflow(t *testing.T) {
@@ -496,8 +506,13 @@ func TestCodeBlockHBarOnOverflow(t *testing.T) {
 	if hbarIdx == -1 {
 		t.Fatal("overflowing block must emit an HBar row")
 	}
-	// It sits between the last body line and the bottom bar (the next line is the bar).
-	if hbarIdx+1 >= len(lines) || lines[hbarIdx].Wide {
-		t.Fatal("HBar row should be a non-Wide row before the bottom bar")
+	if lines[hbarIdx].Wide {
+		t.Fatal("HBar row must be a non-Wide row")
+	}
+	// An overflowing block drops the 🮂 bottom bar — the scrollbar caps it.
+	for _, l := range lines {
+		if strings.Contains(l.Text, "🮂") {
+			t.Fatal("overflowing block must NOT emit the 🮂 bottom bar")
+		}
 	}
 }

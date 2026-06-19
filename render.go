@@ -264,7 +264,14 @@ func (r *renderer) emitProse(s string, indent int) {
 func (r *renderer) blank() { r.lines = append(r.lines, Line{Text: "", Wide: false}) }
 
 func (r *renderer) trimTrailingBlank() {
-	for len(r.lines) > 0 && strings.TrimSpace(strip(r.lines[len(r.lines)-1].Text)) == "" {
+	// An HBar row has empty Text but is NOT blank — it's a horizontal scrollbar
+	// the View draws dynamically. Keep it even when it ends the document (an
+	// overflowing code block as the last element), or its scrollbar is lost.
+	for len(r.lines) > 0 {
+		last := r.lines[len(r.lines)-1]
+		if last.HBar > 0 || strings.TrimSpace(strip(last.Text)) != "" {
+			break
+		}
 		r.lines = r.lines[:len(r.lines)-1]
 	}
 }
@@ -434,15 +441,18 @@ func (r *renderer) code(n ast.Node) {
 		}
 	}
 
-	// Horizontal scrollbar row when the block is wider than the viewport.
+	// When the block overflows the viewport, the horizontal scrollbar row caps
+	// it (and reads as the bottom padding) — so we skip the 🮂 bottom bar there,
+	// which otherwise looks redundant/unpolished. Non-overflowing blocks keep
+	// the normal 🮂 bottom edge.
 	if blockW > width {
 		r.lines = append(r.lines, Line{Wide: false, HBar: blockW, Code: true})
+	} else {
+		// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.
+		// Total display width == width. Wide=false.
+		bottomLine := codeFgANSI + strings.Repeat("🮂", width) + "\x1b[0m"
+		r.lines = append(r.lines, Line{Text: bottomLine, Wide: false, Code: true})
 	}
-
-	// Bottom edge bar: 🮂 characters in fg colCodeBg (#282C41), no background.
-	// Total display width == width. Wide=false.
-	bottomLine := codeFgANSI + strings.Repeat("🮂", width) + "\x1b[0m"
-	r.lines = append(r.lines, Line{Text: bottomLine, Wide: false, Code: true})
 }
 
 // highlight runs chroma over src; on any failure it returns src unchanged.
