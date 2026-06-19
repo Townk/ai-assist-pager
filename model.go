@@ -325,19 +325,18 @@ func (m model) View() tea.View {
 		sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("press a label • Esc cancel"))
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
-		// Empty line before the title.
+		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
 		sb.WriteString("\n")
-		// Header (left-padded)
 		sb.WriteString("  " + m.header() + "\n")
-		// Top padding blank
 		sb.WriteString("\n")
-		// Rows 3..H-2: body (each left-padded)
-		for _, row := range rows {
-			sb.WriteString("  " + row + "\n")
+		for i, row := range rows {
+			idx := m.yOff + i
+			if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
+				row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw)
+			}
+			sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
 		}
-		// Row H-1: bottom padding blank
 		sb.WriteString("\n")
-		// Row H: hint (left-padded).
 		sb.WriteString("  " + m.hint())
 	}
 
