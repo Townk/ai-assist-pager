@@ -49,6 +49,10 @@ const (
 	colLavender = "#b4befe"
 	colSky      = "#89dceb"
 	colSubtext  = "#9399b2"
+
+	// Hint-mode label colors (flash.nvim style): bright red on dark red.
+	colHintLabelFg = "#ff5555"
+	colHintLabelBg = "#3a1212"
 )
 
 // codeBgANSI is the code block background (#282C41 = R40 G44 B65) applied
