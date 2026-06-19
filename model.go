@@ -21,6 +21,10 @@ type model struct {
 	fifoPath   string
 	hintMode   bool
 	hintLabels map[string]Button
+	helpMode   bool
+	helpLines  []Line
+	helpYOff   int
+	helpXOff   int
 }
 
 // emitAction appends a record framed as "<kind>US<payload>RS" to the actions
@@ -43,7 +47,7 @@ func (m model) emitAction(b Button) {
 }
 
 func newModel(harness, md string) model {
-	return model{harness: harness, md: md, width: 80, height: 24}
+	return model{harness: harness, md: md, width: 80, height: 24, helpLines: buildHelpLines()}
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -113,6 +117,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.reflow()
+		m.clampHelpScroll()
 		return m, nil
 	case tea.MouseClickMsg:
 		if msg.Button == tea.MouseLeft {
@@ -122,6 +127,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyPressMsg:
+		// Help overlay: resolve before hint/normal handling.
+		if m.helpMode {
+			switch msg.String() {
+			case "esc", "q", "?":
+				m.helpMode = false
+			case "down", "j":
+				m.helpYOff++
+			case "up", "k":
+				m.helpYOff--
+			case "ctrl+d":
+				m.helpYOff += helpHalf(m)
+			case "ctrl+u":
+				m.helpYOff -= helpHalf(m)
+			case "ctrl+f", "pgdown":
+				m.helpYOff += helpPage(m)
+			case "ctrl+b", "pgup":
+				m.helpYOff -= helpPage(m)
+			case "g", "home":
+				m.helpYOff = 0
+			case "G", "end":
+				m.helpYOff = len(m.helpLines)
+			case "right", "l":
+				m.helpXOff++
+			case "left", "h":
+				m.helpXOff--
+			case "L":
+				m.helpXOff += helpHalfW(m)
+			case "H":
+				m.helpXOff -= helpHalfW(m)
+			case "0", "^":
+				m.helpXOff = 0
+			case "$":
+				m.helpXOff = MaxWideWidth(m.helpLines)
+			}
+			m.clampHelpScroll()
+			return m, nil
+		}
 		// Hint mode: resolve the pending label before any normal nav.
 		if m.hintMode {
 			switch msg.String() {
@@ -153,6 +195,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
+		case "?":
+			m.helpMode = true
+			m.helpYOff = 0
+			m.helpXOff = 0
+			return m, nil
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		// Vertical: line
@@ -218,10 +265,59 @@ func (m model) header() string {
 		Render(strings.Repeat("▓", 3) + " ai-assist — " + m.harness)
 }
 
-func (m model) hint() string {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).
-		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit  Space hints")
+// helpInnerDims is the modal's inner content area (cols x rows) for a pane of
+// width x height: pane minus a ~2-cell outer margin, the border (2), the inner
+// padding (8 horizontal / 4 vertical) and the title row (1). Floored at 1.
+func helpInnerDims(width, height int) (innerW, innerH int) {
+	innerW = width - 4 - 2 - 8  // margin + border + h-padding
+	innerH = height - 4 - 2 - 4 - 1 // margin + border + v-padding + title
+	if innerW < 1 {
+		innerW = 1
+	}
+	if innerH < 1 {
+		innerH = 1
+	}
+	return innerW, innerH
 }
+
+func (m *model) clampHelpScroll() {
+	innerW, innerH := helpInnerDims(m.width, m.height)
+	maxY := len(m.helpLines) - innerH
+	if maxY < 0 {
+		maxY = 0
+	}
+	if m.helpYOff > maxY {
+		m.helpYOff = maxY
+	}
+	if m.helpYOff < 0 {
+		m.helpYOff = 0
+	}
+	maxX := MaxWideWidth(m.helpLines) - innerW
+	if maxX < 0 {
+		maxX = 0
+	}
+	if m.helpXOff > maxX {
+		m.helpXOff = maxX
+	}
+	if m.helpXOff < 0 {
+		m.helpXOff = 0
+	}
+}
+
+// statusBar is the slim, mode-aware bottom hint.
+func (m model) statusBar() string {
+	st := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
+	if m.hintMode || m.helpMode {
+		return st.Render("\U000F12B7: cancel")
+	}
+	return st.Render("\U000F1050: action • \U000F12B7: close • ?: keys")
+}
+
+func helpInnerH(m model) int { _, h := helpInnerDims(m.width, m.height); return h }
+func helpInnerW(m model) int { w, _ := helpInnerDims(m.width, m.height); return w }
+func helpHalf(m model) int   { if h := helpInnerH(m) / 2; h > 1 { return h }; return 1 }
+func helpPage(m model) int   { if h := helpInnerH(m); h > 1 { return h }; return 1 }
+func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; return 1 }
 
 
 func (m model) View() tea.View {
@@ -273,7 +369,7 @@ func (m model) View() tea.View {
 			sb.WriteString("  " + base + vscrollCell(i, pos, size) + "\n")
 		}
 		sb.WriteString("\n")
-		sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("press a label • Esc cancel"))
+		sb.WriteString("  " + m.statusBar())
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
 		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
@@ -288,7 +384,7 @@ func (m model) View() tea.View {
 			sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
 		}
 		sb.WriteString("\n")
-		sb.WriteString("  " + m.hint())
+		sb.WriteString("  " + m.statusBar())
 	}
 
 	v := tea.NewView(sb.String())
