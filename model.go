@@ -533,15 +533,12 @@ func (m model) helpModal() string {
 	}
 	body = append(body, row(blank, tr)) // bottom pad (gap above the hbar; vbar runs through it)
 	if needH {
-		// Horizontal bar: a row flush to the bottom border, running from just
-		// inside the left border. Width textW+4 spans the left pad + text + gap;
-		// when the vbar is also shown it stops one cell short (the trailing space),
-		// so the two bars don't collide at the bottom-right corner.
-		hb := hbarFlush(contentW, textW, textW+4, m.helpXOff, colMantle)
-		if needV {
-			hb += " " // leave the corner (the vbar column) empty
-		}
-		body = append(body, band(hb, mantleBg, 0))
+		// Horizontal bar: a row flush to the bottom border, spanning the full inner
+		// width. hscrollbarRow always renders 1 leading + 1 trailing space, so the
+		// bar floats just inside the left/right borders regardless of the vbar. When
+		// the vbar is shown, the trailing space lands in the vbar column (which the
+		// vbar vacates on this row), so the two bars never collide at the corner.
+		body = append(body, band(hscrollbarRow(contentW, m.helpXOff, textW+4+bi(needV), colMantle), mantleBg, 0))
 	}
 
 	content := strings.Join(body, "\n")

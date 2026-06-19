@@ -49,29 +49,6 @@ func thumbTrack(total, visible, track, off int) (pos, size int) {
 	return pos, size
 }
 
-// hbarFlush renders a horizontal scrollbar exactly `track` columns wide with no
-// leading/trailing pad, so it can run flush between borders. The thumb (━ on the
-// `bg`) is sized to `visible`/`total` of the track over a ─ rail; off scrolls it.
-func hbarFlush(total, visible, track, off int, bg string) string {
-	if track < 1 {
-		return ""
-	}
-	pos, size := thumbTrack(total, visible, track, off)
-	rail := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colSurface0))
-	thumb := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colOverlay1))
-	var sb strings.Builder
-	if pos > 0 {
-		sb.WriteString(rail.Render(strings.Repeat("─", pos)))
-	}
-	if size > 0 {
-		sb.WriteString(thumb.Render(strings.Repeat("━", size)))
-	}
-	if tail := track - pos - size; tail > 0 {
-		sb.WriteString(rail.Render(strings.Repeat("─", tail)))
-	}
-	return sb.String()
-}
-
 // hthumb returns the thumb [pos, pos+size) within a `view`-wide track for a
 // `blockW`-column block scrolled to `xoff` (clamped). Full track when blockW≤view.
 func hthumb(blockW, view, xoff int) (pos, size int) {
