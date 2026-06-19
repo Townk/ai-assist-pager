@@ -351,17 +351,13 @@ func (r *renderer) code(n ast.Node) {
 			var styledLabel string
 			var labelCols int
 			if glyph, color, ok := langIcon(lang); ok {
-				// Icon path: colored glyph + trailing space, on code bg.
-				rendered := lipgloss.NewStyle().
-					Background(lipgloss.Color(colCodeBg)).
-					Foreground(lipgloss.Color(color)).
-					Render(glyph)
-				trailing := lipgloss.NewStyle().
-					Background(lipgloss.Color(colCodeBg)).
-					Render(" ")
-				styledLabel = rendered + trailing
-				// glyph is 1 cell; label region is glyph(1) + trailing space(1).
-				labelCols = lipgloss.Width(glyph) + 1
+				// Icon path: leading space + colored glyph + trailing space, on code
+				// bg (mirrors the " lang " padding of the text fallback).
+				bgStyle := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg))
+				rendered := bgStyle.Foreground(lipgloss.Color(color)).Render(glyph)
+				styledLabel = bgStyle.Render(" ") + rendered + bgStyle.Render(" ")
+				// glyph is 1 cell; label region is space(1) + glyph(1) + space(1).
+				labelCols = lipgloss.Width(glyph) + 2
 			} else {
 				// Text fallback: dim " lang " region.
 				labelRegion := " " + lang + " "
