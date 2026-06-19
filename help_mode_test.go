@@ -29,46 +29,53 @@ func TestStatusBarPerMode(t *testing.T) {
 	}
 }
 
-// TestHelpInnerDims tests the method form with content-capped values.
-func TestHelpInnerDims(t *testing.T) {
-	// Generous pane: content should fit (no cap hit).
+// TestHelpTextDims tests the visible-text dims with content-capped values.
+func TestHelpTextDims(t *testing.T) {
+	// Generous pane: content fits, no scrollbars.
 	m := newModel("T", "hi")
 	m.width, m.height = 120, 40
-	w, h := m.helpInnerDims()
+	w, h, needV, needH := m.helpTextDims()
 	if w < 1 || h < 1 {
 		t.Fatalf("generous pane gave non-positive dims: %d x %d", w, h)
 	}
-	// Content fits → dims equal the content size (not the cap).
-	contentW := MaxWideWidth(m.helpLines)
-	contentH := len(m.helpLines)
-	if w != contentW {
-		t.Fatalf("generous pane: innerW %d != contentW %d (should be content-sized)", w, contentW)
+	if needV || needH {
+		t.Fatalf("generous pane should need no scrollbars: needV=%v needH=%v", needV, needH)
 	}
-	if h != contentH {
-		t.Fatalf("generous pane: innerH %d != contentH %d (should be content-sized)", h, contentH)
+	// Content fits → dims equal the content size (not the cap).
+	if want := MaxWideWidth(m.helpLines); w != want {
+		t.Fatalf("generous pane: textW %d != contentW %d (should be content-sized)", w, want)
+	}
+	if want := len(m.helpLines); h != want {
+		t.Fatalf("generous pane: textH %d != content height %d (should be content-sized)", h, want)
 	}
 
-	// Tiny pane: both dims should be floored at 1.
+	// Tiny pane: both dims floored at 1.
 	mt := newModel("T", "hi")
 	mt.width, mt.height = 8, 5
-	tw, th := mt.helpInnerDims()
+	tw, th, _, _ := mt.helpTextDims()
 	if tw < 1 || th < 1 {
 		t.Fatalf("tiny pane must still give ≥1x1: %d x %d", tw, th)
 	}
 
-	// Medium pane where caps kick in: verify capping math.
+	// Medium pane where caps kick in: text width within cw-14 (minus the vbar
+	// column when shown), text height within m.height-8.
 	mc := newModel("T", "hi")
 	mc.width, mc.height = 40, 20
 	cw := mc.contentWidth()
-	capW := cw - 14
-	capH := mc.height - 9
-	cw2, ch2 := mc.helpInnerDims()
-	if capW > 0 && cw2 > capW {
-		t.Fatalf("medium pane: innerW %d exceeds cap %d", cw2, capW)
+	tw2, th2, nV, _ := mc.helpTextDims()
+	if capW := cw - 14 - boolToInt(nV); capW > 0 && tw2 > capW {
+		t.Fatalf("medium pane: textW %d exceeds cap %d", tw2, capW)
 	}
-	if capH > 0 && ch2 > capH {
-		t.Fatalf("medium pane: innerH %d exceeds cap %d", ch2, capH)
+	if capH := mc.height - 8; capH > 0 && th2 > capH {
+		t.Fatalf("medium pane: textH %d exceeds cap %d", th2, capH)
 	}
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func TestHelpClampScroll(t *testing.T) {
@@ -79,8 +86,8 @@ func TestHelpClampScroll(t *testing.T) {
 	if m.helpYOff < 0 || m.helpXOff < 0 {
 		t.Fatal("offsets must not go negative")
 	}
-	_, innerH := m.helpInnerDims()
-	if max := len(m.helpLines) - innerH; max >= 0 && m.helpYOff > max {
+	_, textH, _, _ := m.helpTextDims()
+	if max := len(m.helpLines) - textH; max >= 0 && m.helpYOff > max {
 		t.Fatalf("helpYOff %d exceeds max %d", m.helpYOff, max)
 	}
 }
@@ -342,46 +349,46 @@ func TestBandReinjectsBg(t *testing.T) {
 }
 
 // TestHelpContentSizeWithinMargins verifies that on a generous pane the box is
-// content-sized and that innerW/innerH are within the margin caps.
+// content-sized and that the text dims are within the margin caps.
 func TestHelpContentSizeWithinMargins(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width, m.height = 120, 40
-	innerW, innerH := m.helpInnerDims()
+	textW, textH, _, _ := m.helpTextDims()
 	cw := m.contentWidth()
 
 	// Content-sized: equal to the actual content dimensions.
-	if want := MaxWideWidth(m.helpLines); innerW != want {
-		t.Fatalf("innerW %d != content width %d", innerW, want)
+	if want := MaxWideWidth(m.helpLines); textW != want {
+		t.Fatalf("textW %d != content width %d", textW, want)
 	}
-	if want := len(m.helpLines); innerH != want {
-		t.Fatalf("innerH %d != content height %d", innerH, want)
+	if want := len(m.helpLines); textH != want {
+		t.Fatalf("textH %d != content height %d", textH, want)
 	}
 
-	// Within margin caps (cw-14 wide; H-9 tall = modal area H-4 minus chrome 5).
-	if innerW > cw-14 {
-		t.Fatalf("innerW %d exceeds cap cw(%d)-14 = %d", innerW, cw, cw-14)
+	// Within margin caps (cw-14 wide; H-8 tall = modal area H-4 minus chrome 4).
+	if textW > cw-14 {
+		t.Fatalf("textW %d exceeds cap cw(%d)-14 = %d", textW, cw, cw-14)
 	}
-	if innerH > m.height-9 {
-		t.Fatalf("innerH %d exceeds cap H(%d)-9 = %d", innerH, m.height, m.height-9)
+	if textH > m.height-8 {
+		t.Fatalf("textH %d exceeds cap H(%d)-8 = %d", textH, m.height, m.height-8)
 	}
 }
 
 // TestHelpModalScrollThreshold pins the rule: the modal fits without scrolling
-// exactly when m.height-9 >= len(helpLines), i.e. the modal area (H-4) minus the
-// box chrome (border 2 + padding 2 + title 1) holds the whole cheatsheet.
+// exactly when m.height-8 >= len(helpLines) — the modal area (H-4) minus the box
+// chrome (border 2 + padding 2) holds the whole cheatsheet (title included).
 func TestHelpModalScrollThreshold(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width = 80
 	// Smallest height where the full cheatsheet fits without scrolling.
 	m.height = 24
-	for ; m.height-9 < len(m.helpLines); m.height++ {
+	for ; m.height-8 < len(m.helpLines); m.height++ {
 	}
-	if _, innerH := m.helpInnerDims(); innerH != len(m.helpLines) {
-		t.Fatalf("at H=%d modal should not scroll, innerH=%d want %d", m.height, innerH, len(m.helpLines))
+	if _, textH, needV, _ := m.helpTextDims(); needV || textH != len(m.helpLines) {
+		t.Fatalf("at H=%d modal should not scroll, textH=%d needV=%v want textH=%d", m.height, textH, needV, len(m.helpLines))
 	}
 	m.height--
-	if _, innerH := m.helpInnerDims(); innerH >= len(m.helpLines) {
-		t.Fatalf("at H=%d modal should scroll, innerH=%d", m.height, innerH)
+	if _, _, needV, _ := m.helpTextDims(); !needV {
+		t.Fatalf("at H=%d modal should scroll (needV)", m.height)
 	}
 }
 
@@ -395,10 +402,8 @@ func TestHelpModalScrollbarUsesMantle(t *testing.T) {
 	m.width, m.height = 30, 24
 	m.helpMode = true
 
-	innerW, _ := m.helpInnerDims()
-	contentW := MaxWideWidth(m.helpLines)
-	if contentW <= innerW {
-		t.Skipf("needH not triggered at this size (contentW=%d, innerW=%d); adjust test dimensions", contentW, innerW)
+	if _, _, _, needH := m.helpTextDims(); !needH {
+		t.Skip("needH not triggered at this size; adjust test dimensions")
 	}
 
 	out := m.helpModal()

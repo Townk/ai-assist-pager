@@ -59,6 +59,8 @@ func buildHelpLines() []Line {
 
 	var out []Line
 	add := func(s string) { out = append(out, Line{Text: s, Wide: true}) }
+	// The title scrolls with the content (no separate fixed header line).
+	add(lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).Render("Keybindings"))
 	add("") // blank between the title and the first section
 	for gi, g := range helpGroups {
 		if gi > 0 {

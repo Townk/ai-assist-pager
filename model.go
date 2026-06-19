@@ -384,36 +384,64 @@ func (m model) header() string {
 		Render(strings.Repeat("▓", 3) + " ai-assist — " + m.harness)
 }
 
-// helpInnerDims returns the modal's inner content area (cols x rows), sized to
-// content and capped to the modal area. The modal area is m.height-4 lines tall
-// — a 2-line top margin (blank + title) and a 2-line bottom margin (blank +
-// status bar) — by cw wide. Box overhead: border(2)+padding(4)=6 wide;
-// border(2)+padding(2)+title(1)=5 tall. So max inner = cw-14 wide, (H-4)-5 =
-// H-9 tall. Content-sized: min(content, cap). Both floored at 1.
-func (m model) helpInnerDims() (innerW, innerH int) {
+func bi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// helpTextDims returns the modal's visible help-text area (cols x rows) and
+// whether each scrollbar is shown. The title now scrolls with the content
+// (m.helpLines includes it), so the modal area (m.height-4) holds, top to
+// bottom: border(1) + padTop(1) + text rows + padBottom(1) + border(1) = text+4.
+// Horizontally the box is capped to cw-8 (4-col margins) and laid out as
+// border(1) + leftPad(2) + text + gap(2) + vbar(needV?1:0) + border(1): the bar
+// sits flush against the right border with a 2-col gap from the text, so the
+// text budget is cw-14, minus one more column when the vbar is shown. The
+// horizontal bar (when needH) takes one text row. All dims floored at 1.
+func (m model) helpTextDims() (textW, textH int, needV, needH bool) {
 	cw := m.contentWidth()
-	maxInnerW := cw - 14
-	maxInnerH := m.height - 9
-	innerW = MaxWideWidth(m.helpLines)
-	if innerW > maxInnerW {
-		innerW = maxInnerW
+	contentMaxW := MaxWideWidth(m.helpLines)
+	maxRows := m.height - 8
+	if maxRows < 1 {
+		maxRows = 1
 	}
-	innerH = len(m.helpLines)
-	if innerH > maxInnerH {
-		innerH = maxInnerH
+	// Two passes resolve the interaction between the bars: reserving the hbar row
+	// can tip vertical overflow, and showing the vbar narrows the text budget.
+	for pass := 0; pass < 2; pass++ {
+		available := maxRows - bi(needH) // rows left for text after the hbar
+		if available < 1 {
+			available = 1
+		}
+		needV = len(m.helpLines) > available
+		maxTextW := cw - 14 - bi(needV)
+		if maxTextW < 1 {
+			maxTextW = 1
+		}
+		needH = contentMaxW > maxTextW
 	}
-	if innerW < 1 {
-		innerW = 1
+	// Visible dims: content-sized, capped to the available area.
+	textH = maxRows - bi(needH)
+	if textH > len(m.helpLines) {
+		textH = len(m.helpLines)
 	}
-	if innerH < 1 {
-		innerH = 1
+	if textH < 1 {
+		textH = 1
 	}
-	return innerW, innerH
+	textW = cw - 14 - bi(needV)
+	if textW > contentMaxW {
+		textW = contentMaxW
+	}
+	if textW < 1 {
+		textW = 1
+	}
+	return textW, textH, needV, needH
 }
 
 func (m *model) clampHelpScroll() {
-	innerW, innerH := m.helpInnerDims()
-	maxY := len(m.helpLines) - innerH
+	textW, textH, _, _ := m.helpTextDims()
+	maxY := len(m.helpLines) - textH
 	if maxY < 0 {
 		maxY = 0
 	}
@@ -423,7 +451,7 @@ func (m *model) clampHelpScroll() {
 	if m.helpYOff < 0 {
 		m.helpYOff = 0
 	}
-	maxX := MaxWideWidth(m.helpLines) - innerW
+	maxX := MaxWideWidth(m.helpLines) - textW
 	if maxX < 0 {
 		maxX = 0
 	}
@@ -444,8 +472,8 @@ func (m model) statusBar() string {
 	return st.Render("\U000F1050: action • \U000F12B7: close • ?: keys")
 }
 
-func helpInnerH(m model) int { _, h := m.helpInnerDims(); return h }
-func helpInnerW(m model) int { w, _ := m.helpInnerDims(); return w }
+func helpInnerH(m model) int { _, h, _, _ := m.helpTextDims(); return h }
+func helpInnerW(m model) int { w, _, _, _ := m.helpTextDims(); return w }
 func helpHalf(m model) int   { if h := helpInnerH(m) / 2; h > 1 { return h }; return 1 }
 func helpPage(m model) int   { if h := helpInnerH(m); h > 1 { return h }; return 1 }
 func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; return 1 }
@@ -463,33 +491,23 @@ func (m model) helpModal() string {
 	if bodyH < 1 {
 		bodyH = 1
 	}
-	innerW, innerH := m.helpInnerDims()
-
+	textW, textH, needV, needH := m.helpTextDims()
 	contentW := MaxWideWidth(m.helpLines)
-	needV := len(m.helpLines) > innerH
-	needH := contentW > innerW
-	rowsW := innerW
-	if needV {
-		rowsW -= 2 // vscrollCell returns " " + glyph = 2 display columns
-	}
-	rowsH := innerH
-	if needH {
-		rowsH-- // leave a row for the horizontal scrollbar
-	}
-	if rowsW < 1 {
-		rowsW = 1
-	}
-	if rowsH < 1 {
-		rowsH = 1
-	}
 
-	windowed := Window(m.helpLines, m.helpXOff, m.helpYOff, rowsW, rowsH)
-	vpos, vsize := vthumb(len(m.helpLines), rowsH, m.helpYOff)
+	// Horizontal padding is applied manually so the vertical scrollbar can sit
+	// flush against the right border: each row is leftPad(2) + text + gap(2) +
+	// vbar(1 when needV). The box itself uses no horizontal padding (Padding(1,0)).
+	windowed := Window(m.helpLines, m.helpXOff, m.helpYOff, textW, textH)
+	vpos, vsize := vthumb(len(m.helpLines), textH, m.helpYOff)
 	var body []string
 	for i, row := range windowed {
-		line := padTo(row, rowsW)
+		line := "  " + padTo(row, textW) + "  " // left pad + text + 2-col gap
 		if needV {
-			line += vscrollCell(i, vpos, vsize) // " " + glyph
+			glyph, col := "│", colSurface0
+			if i >= vpos && i < vpos+vsize {
+				glyph, col = "┃", colOverlay1
+			}
+			line += lipgloss.NewStyle().Foreground(lipgloss.Color(col)).Render(glyph)
 		}
 		// band re-injects the modal bg after every inner color reset, so plain
 		// gaps and reset segments keep the modal background instead of the
@@ -497,22 +515,21 @@ func (m model) helpModal() string {
 		body = append(body, band(line, mantleBg, 0))
 	}
 	if needH {
-		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW, colMantle))
+		hb := "  " + hscrollbarRow(contentW, m.helpXOff, textW, colMantle) + "  "
+		if needV {
+			hb += " " // keep the row width equal to text rows (blank under the vbar)
+		}
+		body = append(body, band(hb, mantleBg, 0))
 	}
 
-	title := band(lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
-		Render("Keybindings"), mantleBg, 0)
-	content := title
-	if len(body) > 0 {
-		content += "\n" + strings.Join(body, "\n")
-	}
+	content := strings.Join(body, "\n")
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(colSurface1)).
 		BorderBackground(lipgloss.Color(colMantle)).
 		Background(lipgloss.Color(colMantle)).
-		Padding(1, 2).
+		Padding(1, 0).
 		Render(content)
 
 	out := lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)
