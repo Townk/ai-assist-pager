@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"os"
 	"strings"
+	"syscall"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -25,12 +26,13 @@ type model struct {
 
 // emitAction appends "<kind>\t<base64 payload>\n" to the actions FIFO. No-op when
 // no FIFO is set (standalone/sample). O_APPEND|O_CREATE so a regular file works in
-// tests and a real FIFO opened by a reader also works.
+// tests and a real FIFO opened by a reader also works. O_NONBLOCK prevents blocking
+// the bubbletea event loop when no reader is attached to the FIFO (returns ENXIO).
 func (m model) emitAction(b Button) {
 	if m.fifoPath == "" {
 		return
 	}
-	f, err := os.OpenFile(m.fifoPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(m.fifoPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE|syscall.O_NONBLOCK, 0o600)
 	if err != nil {
 		return
 	}
