@@ -44,25 +44,35 @@ func hthumb(blockW, view, xoff int) (pos, size int) {
 	return pos, size
 }
 
-// hscrollbarRow renders a cw-wide horizontal scrollbar (─ track / ━ thumb) on
-// the code background at the block's current horizontal offset.
+// hscrollbarRow renders a cw-wide horizontal scrollbar on the code background:
+// 1 leading + 1 trailing pad space (so the bar floats inside the block instead
+// of touching its edges like a divider) around a ─ track / ━ thumb spanning the
+// inner width, at the block's current horizontal offset.
 func hscrollbarRow(blockW, xoff, cw int) string {
-	pos, size := hthumb(blockW, cw, xoff)
-	if pos+size > cw {
-		size = cw - pos
+	pad := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg))
+	inner := cw - 2
+	if inner < 1 {
+		// Pane too narrow for the pads; just a code-bg blank.
+		return pad.Render(strings.Repeat(" ", cw))
+	}
+	pos, size := hthumb(blockW, inner, xoff)
+	if pos+size > inner {
+		size = inner - pos
 	}
 	track := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg)).Foreground(lipgloss.Color(colSurface0))
 	thumb := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg)).Foreground(lipgloss.Color(colOverlay1))
 	var sb strings.Builder
+	sb.WriteString(pad.Render(" "))
 	if pos > 0 {
 		sb.WriteString(track.Render(strings.Repeat("─", pos)))
 	}
 	if size > 0 {
 		sb.WriteString(thumb.Render(strings.Repeat("━", size)))
 	}
-	if tail := cw - pos - size; tail > 0 {
+	if tail := inner - pos - size; tail > 0 {
 		sb.WriteString(track.Render(strings.Repeat("─", tail)))
 	}
+	sb.WriteString(pad.Render(" "))
 	return sb.String()
 }
 
@@ -86,11 +96,37 @@ func padTo(s string, w int) string {
 	return s
 }
 
-// hintCodeRow paints the row's visible text, muted, on a solid code-bg fill —
-// the hint-mode look for code rows (keeps the block cohesive, no seams).
+// hintCodeRow renders a code-block row for hint mode: the visible text muted
+// (colSubtext) on the solid code-bg fill, EXCEPT the decorative border glyphs
+// (▂ tab fill U+2582 / 🮂 bottom bar U+1FB82), which keep their normal color
+// (colCodeBg foreground, no background) so the block's rounded edges look
+// unchanged — only the CONTENT and TAB are recolored, not the borders.
 func hintCodeRow(row string, width int) string {
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext))
-	return band(muted.Render(strip(row)), codeBgANSI, width)
+	plain := []rune(strip(row))
+	for len(plain) < width {
+		plain = append(plain, ' ')
+	}
+	if len(plain) > width {
+		plain = plain[:width]
+	}
+	border := lipgloss.NewStyle().Foreground(lipgloss.Color(colCodeBg))
+	content := lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext)).Background(lipgloss.Color(colCodeBg))
+	isBorder := func(r rune) bool { return r == '▂' || r == '\U0001FB82' }
+	var sb strings.Builder
+	for i := 0; i < len(plain); {
+		j, b := i, isBorder(plain[i])
+		for j < len(plain) && isBorder(plain[j]) == b {
+			j++
+		}
+		seg := string(plain[i:j])
+		if b {
+			sb.WriteString(border.Render(seg))
+		} else {
+			sb.WriteString(content.Render(seg))
+		}
+		i = j
+	}
+	return sb.String()
 }
 
 // overlayLabels splices each label char into an already-styled row at its

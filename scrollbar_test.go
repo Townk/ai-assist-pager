@@ -46,15 +46,23 @@ func TestHScrollbarRowWidthAndGlyphs(t *testing.T) {
 	if lipgloss.Width(row) != 40 {
 		t.Fatalf("width = %d, want 40", lipgloss.Width(row))
 	}
-	plain := strip(row)
-	for _, r := range plain {
+	plain := []rune(strip(row))
+	// 1 leading + 1 trailing pad space so the bar floats inside the block.
+	if plain[0] != ' ' || plain[len(plain)-1] != ' ' {
+		t.Fatalf("want leading+trailing pad space; got %q", string(plain))
+	}
+	thumbN := 0
+	for _, r := range plain[1 : len(plain)-1] {
 		if r != '─' && r != '━' {
-			t.Fatalf("unexpected glyph %q", r)
+			t.Fatalf("inner glyph %q not ─/━", r)
+		}
+		if r == '━' {
+			thumbN++
 		}
 	}
-	_, size := hthumb(200, 40, 0)
-	if strings.Count(plain, "━") != size {
-		t.Fatalf("thumb run = %d, want %d", strings.Count(plain, "━"), size)
+	_, size := hthumb(200, 40-2, 0) // inner = cw-2
+	if thumbN != size {
+		t.Fatalf("thumb run = %d, want %d", thumbN, size)
 	}
 }
 
@@ -77,7 +85,16 @@ func TestHintCodeRow(t *testing.T) {
 		t.Fatalf("strip = %q, want %q", strip(got), "hi    ")
 	}
 	if !strings.Contains(got, codeBgANSI) {
-		t.Fatal("must paint the code-bg fill")
+		t.Fatal("content must paint the code-bg fill")
+	}
+	// Border glyphs (▂ / 🮂) keep their normal color and get NO bg fill, so a
+	// pure border row (the bottom bar) is unchanged.
+	bar := hintCodeRow(strings.Repeat("\U0001FB82", 6), 6)
+	if strings.Contains(bar, codeBgANSI) {
+		t.Fatal("border glyphs must not get the code-bg fill")
+	}
+	if strip(bar) != strings.Repeat("\U0001FB82", 6) {
+		t.Fatalf("border row strip = %q", strip(bar))
 	}
 }
 
