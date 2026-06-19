@@ -328,8 +328,15 @@ func (m model) helpModal() string {
 
 	// The box chrome is: border(2) + v-padding(4) + title(1) = 7 rows.
 	// Clamp innerH so the box never overflows bodyH.
-	if maxInnerH := bodyH - 7; innerH > maxInnerH {
+	maxInnerH := bodyH - 7
+	if maxInnerH < 0 {
+		maxInnerH = 0
+	}
+	if innerH > maxInnerH {
 		innerH = maxInnerH
+	}
+	if innerH < 0 {
+		innerH = 0
 	}
 
 	contentW := MaxWideWidth(m.helpLines)
@@ -379,7 +386,18 @@ func (m model) helpModal() string {
 		Padding(2, 4).
 		Render(content)
 
-	return lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)
+	out := lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)
+	lines := strings.Split(out, "\n")
+	if len(lines) > bodyH {
+		lines = lines[:bodyH]
+	}
+	clipStyle := lipgloss.NewStyle().MaxWidth(bodyW)
+	for i, line := range lines {
+		if lipgloss.Width(line) > bodyW {
+			lines[i] = padTo(clipStyle.Render(line), bodyW)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m model) View() tea.View {

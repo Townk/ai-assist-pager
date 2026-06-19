@@ -53,32 +53,19 @@ func TestHelpClampScroll(t *testing.T) {
 	}
 }
 
-func TestHelpModalFitsPane(t *testing.T) {
-	m := newModel("T", "hi")
-	m.width, m.height = 80, 24
-	m.helpMode = true
-	out := m.helpModal()
-	if h := lipgloss.Height(out); h != m.body() {
-		t.Fatalf("modal height = %d, want m.body() = %d", h, m.body())
-	}
-	for i, line := range strings.Split(out, "\n") {
-		if w := lipgloss.Width(line); w != m.contentWidth() {
-			t.Fatalf("modal line %d width = %d, want cw = %d", i, w, m.contentWidth())
+func TestHelpModalFitsAllPanes(t *testing.T) {
+	for _, d := range [][2]int{{80, 24}, {50, 18}, {30, 12}, {120, 40}, {28, 11}, {24, 9}, {20, 8}} {
+		m := newModel("T", "hi")
+		m.width, m.height = d[0], d[1]
+		m.helpMode = true
+		out := m.helpModal()
+		if h := lipgloss.Height(out); h != m.body() {
+			t.Fatalf("%dx%d: modal height %d != body %d", d[0], d[1], h, m.body())
 		}
-	}
-}
-
-func TestHelpModalFitsPaneSmall(t *testing.T) {
-	m := newModel("T", "hi")
-	m.width, m.height = 30, 12
-	m.helpMode = true
-	out := m.helpModal()
-	if h := lipgloss.Height(out); h != m.body() {
-		t.Fatalf("modal height = %d, want m.body() = %d", h, m.body())
-	}
-	for i, line := range strings.Split(out, "\n") {
-		if w := lipgloss.Width(line); w != m.contentWidth() {
-			t.Fatalf("modal line %d width = %d, want cw = %d", i, w, m.contentWidth())
+		for i, line := range strings.Split(out, "\n") {
+			if w := lipgloss.Width(line); w != m.contentWidth() {
+				t.Fatalf("%dx%d: line %d width %d != cw %d", d[0], d[1], i, w, m.contentWidth())
+			}
 		}
 	}
 }
