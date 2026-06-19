@@ -10,15 +10,17 @@ import (
 )
 
 type model struct {
-	harness  string
-	md       string
-	lines    []Line
-	buttons  []Button
-	width    int
-	height   int
-	xOff     int
-	yOff     int
-	fifoPath string
+	harness    string
+	md         string
+	lines      []Line
+	buttons    []Button
+	width      int
+	height     int
+	xOff       int
+	yOff       int
+	fifoPath   string
+	hintMode   bool
+	hintLabels map[string]Button
 }
 
 // emitAction appends "<kind>\t<base64 payload>\n" to the actions FIFO. No-op when
@@ -116,6 +118,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyPressMsg:
+		// Hint mode: resolve the pending label before any normal nav.
+		if m.hintMode {
+			switch msg.String() {
+			case "esc":
+				m.hintMode = false
+				m.hintLabels = nil
+			default:
+				if b, ok := m.hintLabels[msg.String()]; ok {
+					m.emitAction(b)
+				}
+				m.hintMode = false
+				m.hintLabels = nil
+			}
+			return m, nil
+		}
+		// Leader: Space enters hint mode over the visible buttons.
+		if msg.String() == " " {
+			var visible []Button
+			for _, b := range m.buttons {
+				if b.Line >= m.yOff && b.Line < m.yOff+m.body() {
+					visible = append(visible, b)
+				}
+			}
+			if len(visible) > 0 {
+				m.hintLabels = assignHintLabels(visible)
+				m.hintMode = true
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
@@ -184,7 +215,26 @@ func (m model) header() string {
 
 func (m model) hint() string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).
-		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit")
+		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit  Space hints")
+}
+
+// hintLegend builds the compact legend shown at the bottom when hint mode is
+// active, e.g. "[a] play  [s] copy  [d] play". The alphabet order is preserved
+// by iterating hintAlphabet rather than the map.
+func (m model) hintLegend() string {
+	labelStyle := lipgloss.NewStyle().Bold(true).
+		Foreground(lipgloss.Color(colBase)).
+		Background(lipgloss.Color(colYellow))
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
+	var parts []string
+	for _, ch := range hintAlphabet {
+		label := string(ch)
+		if b, ok := m.hintLabels[label]; ok {
+			parts = append(parts, labelStyle.Render(label)+" "+keyStyle.Render(b.Kind))
+		}
+	}
+	prefix := lipgloss.NewStyle().Foreground(lipgloss.Color(colYellow)).Bold(true).Render("HINT ")
+	return prefix + strings.Join(parts, keyStyle.Render("  "))
 }
 
 func (m model) View() tea.View {
@@ -203,8 +253,12 @@ func (m model) View() tea.View {
 	}
 	// Row H-1: bottom padding blank
 	sb.WriteString("\n")
-	// Row H: hint (left-padded)
-	sb.WriteString("  " + m.hint())
+	// Row H: hint (left-padded); replaced by legend when hint mode is active.
+	if m.hintMode {
+		sb.WriteString("  " + m.hintLegend())
+	} else {
+		sb.WriteString("  " + m.hint())
+	}
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
