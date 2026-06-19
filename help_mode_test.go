@@ -475,6 +475,13 @@ func TestMouseWheelScroll(t *testing.T) {
 		t.Fatalf("wheel left should scroll left, xOff=%d (was %d)", m.xOff, dx)
 	}
 
+	// Shift + vertical wheel scrolls horizontally (the common terminal mechanism).
+	m.xOff = 0
+	mm, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, Mod: tea.ModShift})
+	if m = mm.(model); m.xOff <= 0 {
+		t.Fatalf("shift+wheel-down should scroll right, xOff=%d", m.xOff)
+	}
+
 	// In help mode the wheel scrolls the modal, leaving the document put.
 	m.helpMode = true
 	m.helpLines = append(m.helpLines, make([]Line, 200)...) // ensure scrollable
