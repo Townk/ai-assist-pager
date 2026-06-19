@@ -247,6 +247,15 @@ func (m model) View() tea.View {
 			Foreground(lipgloss.Color(colHintLabelFg)).
 			Background(lipgloss.Color(colHintLabelBg))
 
+		// Button glyph columns per tab line — given the hint-label dark-red bg.
+		buttonColsByRow := map[int]map[int]bool{}
+		for _, b := range m.buttons {
+			if buttonColsByRow[b.Line] == nil {
+				buttonColsByRow[b.Line] = map[int]bool{}
+			}
+			buttonColsByRow[b.Line][b.Col] = true
+		}
+
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
 		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
 		sb.WriteString("\n")
@@ -256,7 +265,7 @@ func (m model) View() tea.View {
 			idx := m.yOff + i
 			var base string
 			if idx >= 0 && idx < len(m.lines) && m.lines[idx].Code {
-				base = hintCodeRow(row, cw) // solid code-bg fill, muted text
+				base = hintCodeRow(row, cw, buttonColsByRow[idx]) // fill + dark-red button cells
 			} else {
 				base = dim.Render(padTo(strip(row), cw))
 			}

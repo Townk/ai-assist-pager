@@ -77,7 +77,7 @@ func TestPadTo(t *testing.T) {
 
 func TestHintCodeRow(t *testing.T) {
 	row := "\x1b[38;2;1;2;3mhi\x1b[0m"
-	got := hintCodeRow(row, 6)
+	got := hintCodeRow(row, 6, nil)
 	if lipgloss.Width(got) != 6 {
 		t.Fatalf("width = %d, want 6", lipgloss.Width(got))
 	}
@@ -92,12 +92,17 @@ func TestHintCodeRow(t *testing.T) {
 	}
 	// Border glyphs (▂ / 🮂) keep their normal color and get NO bg fill, so a
 	// pure border row (the bottom bar) is unchanged.
-	bar := hintCodeRow(strings.Repeat("\U0001FB82", 6), 6)
+	bar := hintCodeRow(strings.Repeat("\U0001FB82", 6), 6, nil)
 	if strings.Contains(bar, codeBgParams) {
 		t.Fatal("border glyphs must not get the code-bg fill")
 	}
 	if strip(bar) != strings.Repeat("\U0001FB82", 6) {
 		t.Fatalf("border row strip = %q", strip(bar))
+	}
+	// A button column gets the hint-label dark-red background (#3a1212).
+	btn := hintCodeRow("ab>cd", 6, map[int]bool{2: true})
+	if !strings.Contains(btn, "48;2;58;18;18") {
+		t.Fatal("button cell must get the dark-red label background")
 	}
 }
 

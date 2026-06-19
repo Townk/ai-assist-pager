@@ -101,7 +101,7 @@ func padTo(s string, w int) string {
 // (▂ tab fill U+2582 / 🮂 bottom bar U+1FB82), which keep their normal color
 // (colCodeBg foreground, no background) so the block's rounded edges look
 // unchanged — only the CONTENT and TAB are recolored, not the borders.
-func hintCodeRow(row string, width int) string {
+func hintCodeRow(row string, width int, buttonCols map[int]bool) string {
 	plain := []rune(strip(row))
 	for len(plain) < width {
 		plain = append(plain, ' ')
@@ -109,21 +109,34 @@ func hintCodeRow(row string, width int) string {
 	if len(plain) > width {
 		plain = plain[:width]
 	}
-	border := lipgloss.NewStyle().Foreground(lipgloss.Color(colCodeBg))
-	content := lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext)).Background(lipgloss.Color(colCodeBg))
-	isBorder := func(r rune) bool { return r == '▂' || r == '\U0001FB82' }
+	const (
+		kBorder = iota
+		kContent
+		kButton
+	)
+	styles := map[int]lipgloss.Style{
+		kBorder:  lipgloss.NewStyle().Foreground(lipgloss.Color(colCodeBg)),
+		kContent: lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext)).Background(lipgloss.Color(colCodeBg)),
+		// Button glyph cells get the hint label's dark-red background so each
+		// button visually connects to its floating label.
+		kButton: lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext)).Background(lipgloss.Color(colHintLabelBg)),
+	}
+	kind := func(i int) int {
+		if buttonCols[i] {
+			return kButton
+		}
+		if plain[i] == '▂' || plain[i] == '\U0001FB82' {
+			return kBorder
+		}
+		return kContent
+	}
 	var sb strings.Builder
 	for i := 0; i < len(plain); {
-		j, b := i, isBorder(plain[i])
-		for j < len(plain) && isBorder(plain[j]) == b {
+		j, k := i, kind(i)
+		for j < len(plain) && kind(j) == k {
 			j++
 		}
-		seg := string(plain[i:j])
-		if b {
-			sb.WriteString(border.Render(seg))
-		} else {
-			sb.WriteString(content.Render(seg))
-		}
+		sb.WriteString(styles[k].Render(string(plain[i:j])))
 		i = j
 	}
 	return sb.String()
