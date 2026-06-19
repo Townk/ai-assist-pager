@@ -55,17 +55,23 @@ think() { printf '\x10t%s\x10' "$1"; }
 # The producer writes the stream to the pager's stdin. Each printf/sleep/cat is
 # a distinct write, so the pager reads them as separate chunks (real streaming);
 # keys still work because the pager reads them from /dev/tty, not this pipe.
+#
+# The sleeps are PURELY for visibility — the pager renders each chunk in well
+# under a millisecond, so without them the whole stream would arrive in one read
+# and appear instantly. Tune DRIP/THINK below to taste (DRIP=0 → near-instant).
+DRIP="${DEMO_DRIP:-0.012}"   # pause between streamed lines
+THINK="${DEMO_THINK:-1.0}"   # how long each thinking label is shown
 producer() {
-  sleep 1.5                                              # see the launch spinner
+  sleep 1.2                                             # see the launch spinner
   printf '# Streaming demo\n\nThis paragraph streamed in.\n'
-  sleep 1
-  think "Searching the web…"; sleep 1.5                  # bottom spinner re-arms (timer 0)
-  think "Reading 12 files…"; sleep 1.5                   # label swaps, timer keeps running
-  printf '\n\nDone thinking — here is the sample:\n\n'   # text clears the spinner
-  sleep 0.8
-  while IFS= read -r line; do                            # drip the sample, line by line
+  sleep 0.6
+  think "Searching the web…"; sleep "$THINK"            # bottom spinner re-arms (timer 0)
+  think "Reading 12 files…"; sleep "$THINK"             # label swaps, timer keeps running
+  printf '\n\nDone thinking — here is the sample:\n\n'  # text clears the spinner
+  sleep 0.4
+  while IFS= read -r line; do                           # drip the sample, line by line
     printf '%s\n' "$line"
-    sleep 0.03
+    [[ "$DRIP" == 0 ]] || sleep "$DRIP"
   done < "$SAMPLE"
 }
 
