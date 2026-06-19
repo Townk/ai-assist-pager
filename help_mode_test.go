@@ -70,6 +70,27 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 	}
 }
 
+func TestViewHeightAllModes(t *testing.T) {
+	for _, d := range [][2]int{{80, 24}, {50, 18}, {120, 40}} {
+		base := newModel("T", "hello\nworld")
+		base.width, base.height = d[0], d[1]
+		base.reflow()
+		for _, mode := range []string{"normal", "hint", "help"} {
+			m := base
+			switch mode {
+			case "hint":
+				m.hintMode = true
+			case "help":
+				m.helpMode = true
+			}
+			got := m.viewString()
+			if h := lipgloss.Height(got); h != m.height {
+				t.Fatalf("%dx%d %s: View height %d != %d", d[0], d[1], mode, h, m.height)
+			}
+		}
+	}
+}
+
 func TestHelpTransitions(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width, m.height = 80, 24

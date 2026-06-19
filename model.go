@@ -319,7 +319,6 @@ func helpHalf(m model) int   { if h := helpInnerH(m) / 2; h > 1 { return h }; re
 func helpPage(m model) int   { if h := helpInnerH(m); h > 1 { return h }; return 1 }
 func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; return 1 }
 
-
 // helpModal renders the centered keybinding modal over the body region.
 func (m model) helpModal() string {
 	cw := m.contentWidth()
@@ -400,7 +399,10 @@ func (m model) helpModal() string {
 	return strings.Join(lines, "\n")
 }
 
-func (m model) View() tea.View {
+// viewString assembles the full rendered frame as a plain string. View wraps
+// this in tea.NewView so that tests can call viewString() directly without
+// needing to extract Content from a tea.View.
+func (m model) viewString() string {
 	cw := m.contentWidth()
 	var sb strings.Builder
 
@@ -456,7 +458,8 @@ func (m model) View() tea.View {
 		sb.WriteString("\n")
 		// The modal occupies the body region (m.body() rows).
 		sb.WriteString(m.helpModal())
-		sb.WriteString("\n")
+		sb.WriteString("\n") // end the modal's last line
+		sb.WriteString("\n") // bottom pad (mirror the normal branch)
 		sb.WriteString("  " + m.statusBar())
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
@@ -475,7 +478,11 @@ func (m model) View() tea.View {
 		sb.WriteString("  " + m.statusBar())
 	}
 
-	v := tea.NewView(sb.String())
+	return sb.String()
+}
+
+func (m model) View() tea.View {
+	v := tea.NewView(m.viewString())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
