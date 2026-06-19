@@ -247,41 +247,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.MouseWheelMsg:
 		// The wheel scrolls the help modal when it's open, otherwise the document
-		// (a few lines/cols per notch). Vertical and horizontal both supported;
-		// ignored in hint mode (a transient selection).
+		// (a few lines per notch). Ignored in hint mode (a transient selection).
+		// Vertical only — terminals don't reliably deliver horizontal-wheel events.
 		const wheelStep = 3
-		// Most terminals send horizontal scroll as Shift + vertical wheel (the SGR
-		// vertical-wheel code with the Shift modifier bit), not as the native
-		// horizontal wheel; handle both.
-		shift := msg.Mod&tea.ModShift != 0
-		var dx, dy int
+		var delta int
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			if shift {
-				dx = -wheelStep
-			} else {
-				dy = -wheelStep
-			}
+			delta = -wheelStep
 		case tea.MouseWheelDown:
-			if shift {
-				dx = wheelStep
-			} else {
-				dy = wheelStep
-			}
-		case tea.MouseWheelLeft:
-			dx = -wheelStep
-		case tea.MouseWheelRight:
-			dx = wheelStep
+			delta = wheelStep
 		default:
 			return m, nil
 		}
 		if m.helpMode {
-			m.helpYOff += dy
-			m.helpXOff += dx
+			m.helpYOff += delta
 			m.clampHelpScroll()
 		} else if !m.hintMode {
-			m.yOff += dy
-			m.xOff += dx
+			m.yOff += delta
 			m.clampScroll()
 		}
 		return m, nil
