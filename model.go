@@ -245,6 +245,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case tea.MouseWheelMsg:
+		// The wheel scrolls the help modal when it's open, otherwise the document
+		// (a few lines per notch). Ignored in hint mode (a transient selection).
+		const wheelStep = 3
+		var delta int
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			delta = -wheelStep
+		case tea.MouseWheelDown:
+			delta = wheelStep
+		default:
+			return m, nil
+		}
+		if m.helpMode {
+			m.helpYOff += delta
+			m.clampHelpScroll()
+		} else if !m.hintMode {
+			m.yOff += delta
+			m.clampScroll()
+		}
+		return m, nil
 	case tea.KeyPressMsg:
 		// Help overlay: resolve before hint/normal handling.
 		if m.helpMode {

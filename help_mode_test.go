@@ -441,3 +441,39 @@ func TestHelpModalScrollbarUsesMantle(t *testing.T) {
 		t.Fatalf("help modal scrollbar row must NOT use colCodeBg bg (%s), but sequence was found in output", codeBgParams)
 	}
 }
+
+// TestMouseWheelScroll verifies the wheel scrolls the document in normal mode
+// and the modal in help mode (and not the document).
+func TestMouseWheelScroll(t *testing.T) {
+	m := newModel("T", "")
+	m.width, m.height = 80, 10
+	m.md = strings.Repeat("line\n", 100)
+	m.reflow()
+	m.follow = false // don't let auto-follow fight the scroll
+	m.yOff = 0
+
+	m2, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = m2.(model)
+	if m.yOff <= 0 {
+		t.Fatalf("wheel down should scroll the document down, yOff=%d", m.yOff)
+	}
+	down := m.yOff
+	m2, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	m = m2.(model)
+	if m.yOff >= down {
+		t.Fatalf("wheel up should scroll back up, yOff=%d (was %d)", m.yOff, down)
+	}
+
+	// In help mode the wheel scrolls the modal, leaving the document put.
+	m.helpMode = true
+	m.helpLines = append(m.helpLines, make([]Line, 200)...) // ensure scrollable
+	docY := m.yOff
+	m2, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = m2.(model)
+	if m.yOff != docY {
+		t.Fatal("wheel in help mode must not move the document")
+	}
+	if m.helpYOff <= 0 {
+		t.Fatalf("wheel down in help mode should scroll the modal, helpYOff=%d", m.helpYOff)
+	}
+}
