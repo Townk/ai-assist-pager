@@ -270,7 +270,7 @@ func (m model) header() string {
 // padding (8 horizontal / 4 vertical) and the title row (1). Floored at 1.
 func helpInnerDims(width, height int) (innerW, innerH int) {
 	innerW = width - 4 - 2 - 8  // margin + border + h-padding
-	innerH = height - 4 - 2 - 4 - 1 // margin + border + v-padding + title
+	innerH = height - 4 - 2 - 4 - 1 - 1 // margin + border + v-padding + title + body() offset
 	if innerW < 1 {
 		innerW = 1
 	}
@@ -326,12 +326,18 @@ func (m model) helpModal() string {
 	bodyW, bodyH := cw, m.body()
 	innerW, innerH := helpInnerDims(m.width, m.height)
 
+	// The box chrome is: border(2) + v-padding(4) + title(1) = 7 rows.
+	// Clamp innerH so the box never overflows bodyH.
+	if maxInnerH := bodyH - 7; innerH > maxInnerH {
+		innerH = maxInnerH
+	}
+
 	contentW := MaxWideWidth(m.helpLines)
-	needV := len(m.helpLines) > innerH
-	needH := contentW > innerW
+	needV := innerH > 0 && len(m.helpLines) > innerH
+	needH := innerH > 0 && contentW > innerW
 	rowsW := innerW
 	if needV {
-		rowsW-- // leave a column for the vertical scrollbar
+		rowsW -= 2 // vscrollCell returns " " + glyph = 2 display columns
 	}
 	rowsH := innerH
 	if needH {
@@ -340,7 +346,7 @@ func (m model) helpModal() string {
 	if rowsW < 1 {
 		rowsW = 1
 	}
-	if rowsH < 1 {
+	if rowsH < 1 && innerH > 0 {
 		rowsH = 1
 	}
 
@@ -361,7 +367,10 @@ func (m model) helpModal() string {
 
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
 		Render(" Keybindings ")
-	content := title + "\n" + strings.Join(body, "\n")
+	content := title
+	if len(body) > 0 {
+		content += "\n" + strings.Join(body, "\n")
+	}
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

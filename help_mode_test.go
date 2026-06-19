@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 func key(s string) tea.KeyPressMsg { return tea.KeyPressMsg{Code: rune(s[0]), Text: s} }
@@ -49,6 +50,36 @@ func TestHelpClampScroll(t *testing.T) {
 	_, innerH := helpInnerDims(m.width, m.height)
 	if max := len(m.helpLines) - innerH; max >= 0 && m.helpYOff > max {
 		t.Fatalf("helpYOff %d exceeds max %d", m.helpYOff, max)
+	}
+}
+
+func TestHelpModalFitsPane(t *testing.T) {
+	m := newModel("T", "hi")
+	m.width, m.height = 80, 24
+	m.helpMode = true
+	out := m.helpModal()
+	if h := lipgloss.Height(out); h != m.body() {
+		t.Fatalf("modal height = %d, want m.body() = %d", h, m.body())
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(line); w != m.contentWidth() {
+			t.Fatalf("modal line %d width = %d, want cw = %d", i, w, m.contentWidth())
+		}
+	}
+}
+
+func TestHelpModalFitsPaneSmall(t *testing.T) {
+	m := newModel("T", "hi")
+	m.width, m.height = 30, 12
+	m.helpMode = true
+	out := m.helpModal()
+	if h := lipgloss.Height(out); h != m.body() {
+		t.Fatalf("modal height = %d, want m.body() = %d", h, m.body())
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(line); w != m.contentWidth() {
+			t.Fatalf("modal line %d width = %d, want cw = %d", i, w, m.contentWidth())
+		}
 	}
 }
 
