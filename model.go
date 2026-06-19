@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"os"
 	"strings"
 	"syscall"
@@ -24,10 +23,13 @@ type model struct {
 	hintLabels map[string]Button
 }
 
-// emitAction appends "<kind>\t<base64 payload>\n" to the actions FIFO. No-op when
-// no FIFO is set (standalone/sample). O_APPEND|O_CREATE so a regular file works in
-// tests and a real FIFO opened by a reader also works. O_NONBLOCK prevents blocking
-// the bubbletea event loop when no reader is attached to the FIFO (returns ENXIO).
+// emitAction appends a record framed as "<kind>US<payload>RS" to the actions
+// FIFO, where US (0x1f, Unit Separator) separates kind from payload and RS
+// (0x1e, Record Separator) terminates the record. Payload is written byte-exact
+// (no encoding). No-op when no FIFO is set (standalone/sample). O_APPEND|O_CREATE
+// so a regular file works in tests and a real FIFO opened by a reader also works.
+// O_NONBLOCK prevents blocking the bubbletea event loop when no reader is attached
+// to the FIFO (returns ENXIO).
 func (m model) emitAction(b Button) {
 	if m.fifoPath == "" {
 		return
@@ -37,7 +39,7 @@ func (m model) emitAction(b Button) {
 		return
 	}
 	defer f.Close()
-	_, _ = f.WriteString(b.Kind + "\t" + base64.StdEncoding.EncodeToString([]byte(b.Payload)) + "\n")
+	_, _ = f.WriteString(b.Kind + "\x1f" + b.Payload + "\x1e")
 }
 
 func newModel(harness, md string) model {
