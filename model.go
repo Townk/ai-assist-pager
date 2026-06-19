@@ -501,8 +501,12 @@ func (m model) helpModal() string {
 	// bottom pad as its gap above. The vbar occupies the rightmost column on every
 	// row, so it runs from the top border to the bottom border.
 	windowed := Window(m.helpLines, m.helpXOff, m.helpYOff, textW, textH)
-	trackH := textH + 2 + bi(needH) // top pad + text rows + bottom pad + optional hbar
-	vpos, vsize := vthumbTrack(len(m.helpLines), textH, trackH, m.helpYOff)
+	// The vbar track spans top pad + text rows + bottom pad (NOT the hbar row), so
+	// when both bars show the vbar ends one cell above the hbar — they don't
+	// collide at the corner. With only the vbar, this is every inner row, so it
+	// still runs flush from the top border to the bottom border.
+	trackH := textH + 2
+	vpos, vsize := thumbTrack(len(m.helpLines), textH, trackH, m.helpYOff)
 	vbar := func(trackRow int) string {
 		if !needV {
 			return ""
@@ -527,10 +531,17 @@ func (m model) helpModal() string {
 		body = append(body, row(padTo(w, textW), tr))
 		tr++
 	}
-	body = append(body, row(blank, tr)) // bottom pad / gap above the hbar
-	tr++
+	body = append(body, row(blank, tr)) // bottom pad (gap above the hbar; vbar runs through it)
 	if needH {
-		body = append(body, row(hscrollbarRow(contentW, m.helpXOff, textW, colMantle), tr)) // hbar flush to bottom border
+		// Horizontal bar: a row flush to the bottom border, running from just
+		// inside the left border. Width textW+4 spans the left pad + text + gap;
+		// when the vbar is also shown it stops one cell short (the trailing space),
+		// so the two bars don't collide at the bottom-right corner.
+		hb := hbarFlush(contentW, textW, textW+4, m.helpXOff, colMantle)
+		if needV {
+			hb += " " // leave the corner (the vbar column) empty
+		}
+		body = append(body, band(hb, mantleBg, 0))
 	}
 
 	content := strings.Join(body, "\n")

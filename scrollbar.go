@@ -21,11 +21,11 @@ func vthumb(total, visible, off int) (pos, size int) {
 	return pos, size
 }
 
-// vthumbTrack is like vthumb but for a scrollbar whose `track` length may exceed
-// the `visible` window — e.g. when the bar runs flush into the box's top/bottom
+// thumbTrack is like vthumb/hthumb but for a 1-D scrollbar whose `track` length
+// may exceed the `visible` window — e.g. when the bar runs flush into the box's
 // padding. The thumb is sized to visible/total of the full track and reaches both
-// ends. Returns a full-length thumb when the content fits.
-func vthumbTrack(total, visible, track, off int) (pos, size int) {
+// ends. Returns a full-length thumb when the content fits. Used for both axes.
+func thumbTrack(total, visible, track, off int) (pos, size int) {
 	if track < 1 {
 		return 0, 0
 	}
@@ -47,6 +47,29 @@ func vthumbTrack(total, visible, track, off int) (pos, size int) {
 		pos = track - size
 	}
 	return pos, size
+}
+
+// hbarFlush renders a horizontal scrollbar exactly `track` columns wide with no
+// leading/trailing pad, so it can run flush between borders. The thumb (━ on the
+// `bg`) is sized to `visible`/`total` of the track over a ─ rail; off scrolls it.
+func hbarFlush(total, visible, track, off int, bg string) string {
+	if track < 1 {
+		return ""
+	}
+	pos, size := thumbTrack(total, visible, track, off)
+	rail := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colSurface0))
+	thumb := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colOverlay1))
+	var sb strings.Builder
+	if pos > 0 {
+		sb.WriteString(rail.Render(strings.Repeat("─", pos)))
+	}
+	if size > 0 {
+		sb.WriteString(thumb.Render(strings.Repeat("━", size)))
+	}
+	if tail := track - pos - size; tail > 0 {
+		sb.WriteString(rail.Render(strings.Repeat("─", tail)))
+	}
+	return sb.String()
 }
 
 // hthumb returns the thumb [pos, pos+size) within a `view`-wide track for a
