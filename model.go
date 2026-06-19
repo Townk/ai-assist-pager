@@ -371,7 +371,7 @@ func (m model) helpModal() string {
 		body = append(body, mantleBg+line+"\x1b[0m")
 	}
 	if needH {
-		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW))
+		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW, colMantle))
 	}
 
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
@@ -474,7 +474,7 @@ func (m model) viewString() string {
 		for i, row := range rows {
 			idx := m.yOff + i
 			if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
-				row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw)
+				row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw, colCodeBg)
 			}
 			sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
 		}

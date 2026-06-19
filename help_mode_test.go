@@ -204,3 +204,31 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 		t.Fatalf("innerH %d exceeds cap body(%d)-9 = %d", innerH, bodyH, bodyH-9)
 	}
 }
+
+// TestHelpModalScrollbarUsesMantle verifies that when the help modal renders a
+// horizontal scrollbar (needH=true), the scrollbar row uses colMantle
+// (#181825 → 48;2;24;24;37) as its background and NOT colCodeBg
+// (#282C41 → 48;2;40;44;65).
+func TestHelpModalScrollbarUsesMantle(t *testing.T) {
+	// width=30 gives cw=26, innerW=12, contentW=42 → needH=true.
+	m := newModel("T", "hi")
+	m.width, m.height = 30, 24
+	m.helpMode = true
+
+	innerW, _ := m.helpInnerDims()
+	contentW := MaxWideWidth(m.helpLines)
+	if contentW <= innerW {
+		t.Skipf("needH not triggered at this size (contentW=%d, innerW=%d); adjust test dimensions", contentW, innerW)
+	}
+
+	out := m.helpModal()
+
+	const mantleBgParams = "48;2;24;24;37"  // colMantle #181825
+	const codeBgParams   = "48;2;40;44;65"  // colCodeBg #282C41
+	if !strings.Contains(out, mantleBgParams) {
+		t.Fatalf("help modal scrollbar row must use colMantle bg (%s), but sequence not found in output", mantleBgParams)
+	}
+	if strings.Contains(out, codeBgParams) {
+		t.Fatalf("help modal scrollbar row must NOT use colCodeBg bg (%s), but sequence was found in output", codeBgParams)
+	}
+}

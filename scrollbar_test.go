@@ -42,7 +42,7 @@ func TestHThumb(t *testing.T) {
 func s2(b, v int) int { _, s := hthumb(b, v, 1<<30); return s }
 
 func TestHScrollbarRowWidthAndGlyphs(t *testing.T) {
-	row := hscrollbarRow(200, 0, 40)
+	row := hscrollbarRow(200, 0, 40, colCodeBg)
 	if lipgloss.Width(row) != 40 {
 		t.Fatalf("width = %d, want 40", lipgloss.Width(row))
 	}

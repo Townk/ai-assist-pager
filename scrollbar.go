@@ -44,23 +44,24 @@ func hthumb(blockW, view, xoff int) (pos, size int) {
 	return pos, size
 }
 
-// hscrollbarRow renders a cw-wide horizontal scrollbar on the code background:
+// hscrollbarRow renders a cw-wide horizontal scrollbar on the given background:
 // 1 leading + 1 trailing pad space (so the bar floats inside the block instead
 // of touching its edges like a divider) around a ─ track / ━ thumb spanning the
 // inner width, at the block's current horizontal offset.
-func hscrollbarRow(blockW, xoff, cw int) string {
-	pad := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg))
+// bg is the background color hex string (e.g. colCodeBg or colMantle).
+func hscrollbarRow(blockW, xoff, cw int, bg string) string {
+	pad := lipgloss.NewStyle().Background(lipgloss.Color(bg))
 	inner := cw - 2
 	if inner < 1 {
-		// Pane too narrow for the pads; just a code-bg blank.
+		// Pane too narrow for the pads; just a bg blank.
 		return pad.Render(strings.Repeat(" ", cw))
 	}
 	pos, size := hthumb(blockW, inner, xoff)
 	if pos+size > inner {
 		size = inner - pos
 	}
-	track := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg)).Foreground(lipgloss.Color(colSurface0))
-	thumb := lipgloss.NewStyle().Background(lipgloss.Color(colCodeBg)).Foreground(lipgloss.Color(colOverlay1))
+	track := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colSurface0))
+	thumb := lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(colOverlay1))
 	var sb strings.Builder
 	sb.WriteString(pad.Render(" "))
 	if pos > 0 {
