@@ -22,6 +22,8 @@ func main() {
 
 	var harness string
 	flag.StringVar(&harness, "harness", "agent", "harness label for the header")
+	var fifoPath string
+	flag.StringVar(&fifoPath, "actions-fifo", "", "FIFO path to write button actions to")
 	flag.Parse()
 
 	var md string
@@ -48,6 +50,7 @@ func main() {
 		// No TTY (tests / pipes): just print the static render and exit.
 		m := newModel(harness, md)
 		m.width = 100
+		m.fifoPath = fifoPath
 		fmt.Print(m.staticRender())
 		return
 	}
@@ -56,8 +59,10 @@ func main() {
 	// Force TrueColor: zellij's alt-screen pane underreports the color profile
 	// during bubbletea's auto-detection, causing colors to be downsampled.
 	// The UI targets a truecolor Catppuccin terminal, so we pin it explicitly.
+	m := newModel(harness, md)
+	m.fifoPath = fifoPath
 	prog := tea.NewProgram(
-		newModel(harness, md),
+		m,
 		tea.WithInput(tty),
 		tea.WithOutput(tty),
 		tea.WithColorProfile(colorprofile.TrueColor),

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -8,14 +10,30 @@ import (
 )
 
 type model struct {
-	harness string
-	md      string
-	lines   []Line
-	buttons []Button
-	width   int
-	height  int
-	xOff    int
-	yOff    int
+	harness  string
+	md       string
+	lines    []Line
+	buttons  []Button
+	width    int
+	height   int
+	xOff     int
+	yOff     int
+	fifoPath string
+}
+
+// emitAction appends "<kind>\t<base64 payload>\n" to the actions FIFO. No-op when
+// no FIFO is set (standalone/sample). O_APPEND|O_CREATE so a regular file works in
+// tests and a real FIFO opened by a reader also works.
+func (m model) emitAction(b Button) {
+	if m.fifoPath == "" {
+		return
+	}
+	f, err := os.OpenFile(m.fifoPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(b.Kind + "\t" + base64.StdEncoding.EncodeToString([]byte(b.Payload)) + "\n")
 }
 
 func newModel(harness, md string) model {
