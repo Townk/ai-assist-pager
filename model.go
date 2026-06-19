@@ -1,13 +1,22 @@
 package main
 
 import (
+	"io"
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// spinTickMsg drives the spinner animation/timer while thinking.
+type spinTickMsg struct{}
+
+func (m model) tickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return spinTickMsg{} })
+}
 
 type model struct {
 	harness    string
@@ -25,6 +34,17 @@ type model struct {
 	helpLines  []Line
 	helpYOff   int
 	helpXOff   int
+
+	// streaming + thinking
+	thinking     bool
+	thinkLabel   string
+	defaultLabel string
+	spinFrame    int
+	spinTicks    int // 100ms ticks within the current thinking session (seconds = /10)
+	streaming    bool
+	follow       bool      // auto-scroll to bottom while streaming
+	reader       io.Reader // input stream source (set by main); nil in tests/static
+	parser       *streamParser
 }
 
 // emitAction appends a record framed as "<kind>US<payload>RS" to the actions
@@ -47,10 +67,27 @@ func (m model) emitAction(b Button) {
 }
 
 func newModel(harness, md string) model {
-	return model{harness: harness, md: md, width: 80, height: 24, helpLines: buildHelpLines()}
+	return model{
+		harness:      harness,
+		md:           md,
+		width:        80,
+		height:       24,
+		helpLines:    buildHelpLines(),
+		defaultLabel: "Working…",
+		follow:       true,
+	}
 }
 
-func (m model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd {
+	if m.reader == nil {
+		return nil
+	}
+	cmds := []tea.Cmd{readStream(m.reader, m.parser)}
+	if m.thinking {
+		cmds = append(cmds, m.tickCmd())
+	}
+	return tea.Batch(cmds...)
+}
 
 // headerRows is the height the header takes (title only; top padding provides
 // the gap between header and body).
@@ -113,6 +150,49 @@ const bodyTop = 1 + headerRows + 1
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case streamEventsMsg:
+		startedThinking := false
+		for _, ev := range msg.events {
+			switch e := ev.(type) {
+			case textEvent:
+				m.md += e.text
+				m.thinking = false
+			case thinkEvent:
+				label := e.label
+				if label == "" {
+					label = m.defaultLabel
+				}
+				if !m.thinking { // new thinking session: reset the timer
+					m.thinking = true
+					m.spinFrame = 0
+					m.spinTicks = 0
+					startedThinking = true
+				}
+				m.thinkLabel = label
+			}
+		}
+		m.reflow()
+		if m.follow {
+			m.yOff = len(m.lines) // clampScroll caps to the bottom
+			m.clampScroll()
+		}
+		if msg.eof {
+			m.streaming = false
+			m.thinking = false
+			return m, nil
+		}
+		cmds := []tea.Cmd{readStream(m.reader, m.parser)}
+		if startedThinking {
+			cmds = append(cmds, m.tickCmd())
+		}
+		return m, tea.Batch(cmds...)
+	case spinTickMsg:
+		if !m.thinking {
+			return m, nil
+		}
+		m.spinFrame++
+		m.spinTicks++
+		return m, m.tickCmd()
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
