@@ -320,6 +320,59 @@ func helpPage(m model) int   { if h := helpInnerH(m); h > 1 { return h }; return
 func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; return 1 }
 
 
+// helpModal renders the centered keybinding modal over the body region.
+func (m model) helpModal() string {
+	cw := m.contentWidth()
+	bodyW, bodyH := cw, m.body()
+	innerW, innerH := helpInnerDims(m.width, m.height)
+
+	contentW := MaxWideWidth(m.helpLines)
+	needV := len(m.helpLines) > innerH
+	needH := contentW > innerW
+	rowsW := innerW
+	if needV {
+		rowsW-- // leave a column for the vertical scrollbar
+	}
+	rowsH := innerH
+	if needH {
+		rowsH-- // leave a row for the horizontal scrollbar
+	}
+	if rowsW < 1 {
+		rowsW = 1
+	}
+	if rowsH < 1 {
+		rowsH = 1
+	}
+
+	windowed := Window(m.helpLines, m.helpXOff, m.helpYOff, rowsW, rowsH)
+	vpos, vsize := vthumb(len(m.helpLines), rowsH, m.helpYOff)
+	var body []string
+	for i, row := range windowed {
+		line := padTo(row, rowsW)
+		if needV {
+			line += vscrollCell(i, vpos, vsize) // " " + glyph
+		}
+		body = append(body, line)
+	}
+	if needH {
+		// hscrollbarRow renders a code-bg bar; here we just need ─/━ at innerW.
+		body = append(body, hscrollbarRow(contentW, m.helpXOff, innerW))
+	}
+
+	title := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).
+		Render(" Keybindings ")
+	content := title + "\n" + strings.Join(body, "\n")
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colMauve)).
+		Background(lipgloss.Color(colSurface0)).
+		Padding(2, 4).
+		Render(content)
+
+	return lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)
+}
+
 func (m model) View() tea.View {
 	cw := m.contentWidth()
 	var sb strings.Builder
@@ -368,6 +421,14 @@ func (m model) View() tea.View {
 			base = overlayLabels(base, labelsByRow[idx], lab)
 			sb.WriteString("  " + base + vscrollCell(i, pos, size) + "\n")
 		}
+		sb.WriteString("\n")
+		sb.WriteString("  " + m.statusBar())
+	} else if m.helpMode {
+		sb.WriteString("\n")
+		sb.WriteString("  " + m.header() + "\n")
+		sb.WriteString("\n")
+		// The modal occupies the body region (m.body() rows).
+		sb.WriteString(m.helpModal())
 		sb.WriteString("\n")
 		sb.WriteString("  " + m.statusBar())
 	} else {
