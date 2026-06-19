@@ -1,5 +1,35 @@
 package main
 
+import (
+	"bufio"
+	"io"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// streamEventsMsg carries one chunk's worth of parsed events from the reader
+// command; eof signals the input stream closed.
+type streamEventsMsg struct {
+	events []streamEvent
+	eof    bool
+}
+
+// readStream returns a command that reads the next chunk from r, feeds it through
+// the parser, and reports the resulting events. eof is set on any read error
+// (including io.EOF); the caller stops re-issuing the command once eof is seen.
+func readStream(r io.Reader, p *streamParser) tea.Cmd {
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(r)
+	}
+	return func() tea.Msg {
+		buf := make([]byte, 4096)
+		n, err := br.Read(buf)
+		events := p.feed(buf[:n])
+		return streamEventsMsg{events: events, eof: err != nil}
+	}
+}
+
 // dle (Data Link Escape, 0x10) brackets a control record on the input stream:
 // DLE <cmd> <payload> DLE. It never appears in markdown/prose, so it cleanly
 // separates out-of-band control from rendered text.

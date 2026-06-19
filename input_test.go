@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func collect(p *streamParser, chunks ...string) []streamEvent {
 	var all []streamEvent
@@ -59,5 +62,26 @@ func TestParserRecordSplitAcrossChunks(t *testing.T) {
 	}
 	if te, ok := got[2].(textEvent); !ok || te.text != "y" {
 		t.Fatalf("want trailing text y, got %#v", got[2])
+	}
+}
+
+func TestReadStreamYieldsEventsThenEOF(t *testing.T) {
+	r := strings.NewReader("hi\x10tWork\x10")
+	p := &streamParser{}
+	// Drain the reader the way Update would: call the command, collect events,
+	// repeat until eof.
+	var events []streamEvent
+	for {
+		msg := readStream(r, p)().(streamEventsMsg)
+		events = append(events, msg.events...)
+		if msg.eof {
+			break
+		}
+	}
+	if len(events) < 2 {
+		t.Fatalf("want >=2 events (text + think), got %d (%#v)", len(events), events)
+	}
+	if _, ok := events[len(events)-1].(thinkEvent); !ok {
+		t.Fatalf("last event should be the think record, got %#v", events[len(events)-1])
 	}
 }
