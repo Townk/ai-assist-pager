@@ -97,12 +97,23 @@ func (m *model) clampScroll() {
 	}
 }
 
+// bodyTop is the screen row (0-based) of the first body line.
+// Layout: leading blank(1) + header(1) + top-pad(1) = row 3.
+const bodyTop = 1 + headerRows + 1
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.reflow()
+		return m, nil
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			if b, ok := buttonAt(m.buttons, msg.X, msg.Y, m.yOff, bodyTop); ok {
+				m.emitAction(b)
+			}
+		}
 		return m, nil
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -196,6 +207,7 @@ func (m model) View() tea.View {
 	sb.WriteString("  " + m.hint())
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
