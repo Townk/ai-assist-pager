@@ -76,6 +76,15 @@ func hslice(s string, start, width int) string {
 	return string(out)
 }
 
+// spliceOver overlays `over` onto `base` starting at display column `col`,
+// replacing base's columns [col, col+width(over)) and preserving base's styling
+// on both sides (ANSI-aware). base should be at least col+width(over) columns
+// wide; columns beyond base are simply absent.
+func spliceOver(base, over string, col int) string {
+	w := lipgloss.Width(over)
+	return hslice(base, 0, col) + over + hslice(base, col+w, 1<<30)
+}
+
 // decodeRune decodes a UTF-8 rune from s[i:], returning the rune and its byte
 // width. Falls back to a single byte on invalid sequences.
 func decodeRune(s string, i int) (rune, int) {

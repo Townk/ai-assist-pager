@@ -96,15 +96,41 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 		m := newModel("T", "hi")
 		m.width, m.height = d[0], d[1]
 		m.helpMode = true
-		out := m.helpModal()
-		if want := m.height - 4; lipgloss.Height(out) != want {
-			t.Fatalf("%dx%d: modal height %d != area %d (H-4)", d[0], d[1], lipgloss.Height(out), want)
+		lines := strings.Split(m.helpModal(), "\n")
+		// When the pane can hold the modal's minimum box (5 rows: 2 border + 2 pad +
+		// 1 text), it must fit within the 4-col side margins and the 2-line
+		// top/bottom margins. (At smaller panes the overlay clips it.)
+		if area := m.height - 4; area >= 5 && len(lines) > area {
+			t.Fatalf("%dx%d: box height %d exceeds area %d (H-4)", d[0], d[1], len(lines), area)
 		}
-		for i, line := range strings.Split(out, "\n") {
-			if w := lipgloss.Width(line); w != m.width {
-				t.Fatalf("%dx%d: line %d width %d != pane width %d", d[0], d[1], i, w, m.width)
+		w := lipgloss.Width(lines[0])
+		if cap := m.width - 8; cap >= 8 && w > cap {
+			t.Fatalf("%dx%d: box width %d exceeds cap %d (W-8)", d[0], d[1], w, cap)
+		}
+		// All rows are the same width (rectangular box).
+		for i, line := range lines {
+			if lw := lipgloss.Width(line); lw != w {
+				t.Fatalf("%dx%d: line %d width %d != box width %d", d[0], d[1], i, lw, w)
 			}
 		}
+	}
+}
+
+// TestHelpOverlayShowsDocument verifies the modal is an overlay: the document
+// markdown still renders behind it, and the modal title shows on top.
+func TestHelpOverlayShowsDocument(t *testing.T) {
+	m := newModel("T", "# Doc Heading\n\nbody paragraph alpha bravo charlie delta echo foxtrot")
+	// A tall pane so the modal (content-sized) doesn't cover the whole body — the
+	// document then shows above/below the centered overlay.
+	m.width, m.height = 80, 40
+	m.reflow()
+	m.helpMode = true
+	out := strip(m.viewString())
+	if !strings.Contains(out, "Doc Heading") {
+		t.Fatal("document content must still render behind the help modal")
+	}
+	if !strings.Contains(out, "Keybindings") {
+		t.Fatal("modal title must render on top of the document")
 	}
 }
 

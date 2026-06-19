@@ -421,6 +421,11 @@ func (m model) helpTextDims() (textW, textH int, needV, needH bool) {
 		}
 		needH = contentMaxW > maxTextW
 	}
+	// At a tiny pane there may be no room for the hbar row; drop it so the box
+	// still fits the area (one text row beats a scrollbar that overflows it).
+	if maxRows-bi(needH) < 1 {
+		needH = false
+	}
 	// Visible dims: content-sized, capped to the available area.
 	textH = maxRows - bi(needH)
 	if textH > len(m.helpLines) {
@@ -482,16 +487,10 @@ func helpHalfW(m model) int  { if w := helpInnerW(m) / 2; w > 1 { return w }; re
 // band each interior row so the modal background is uniform throughout.
 const mantleBg = "\x1b[48;2;24;24;37m" // #181825 = R24 G24 B37
 
-// helpModal renders the centered keybinding modal over the body region.
+// helpModal builds the bordered keybinding box (content-sized, capped to width-8
+// wide × (m.height-4) tall by helpTextDims). It is NOT placed: the View overlays
+// it onto the live document view so the markdown keeps rendering behind it.
 func (m model) helpModal() string {
-	// Placement area = the full pane width × the modal area (m.height-4 rows: a
-	// 2-line top margin of blank + title above, bottomPad + status bar below). The
-	// box is content-sized, capped to width-8 / area, and centered here — so it
-	// gets a 4-col margin on each side and a >=2-line margin top/bottom.
-	bodyW, bodyH := m.width, m.height-4
-	if bodyH < 1 {
-		bodyH = 1
-	}
 	textW, textH, needV, needH := m.helpTextDims()
 	contentW := MaxWideWidth(m.helpLines)
 
@@ -544,26 +543,13 @@ func (m model) helpModal() string {
 
 	content := strings.Join(body, "\n")
 
-	box := lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(colSurface1)).
 		BorderBackground(lipgloss.Color(colMantle)).
 		Background(lipgloss.Color(colMantle)).
 		Padding(0, 0).
 		Render(content)
-
-	out := lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)
-	lines := strings.Split(out, "\n")
-	if len(lines) > bodyH {
-		lines = lines[:bodyH]
-	}
-	clipStyle := lipgloss.NewStyle().MaxWidth(bodyW)
-	for i, line := range lines {
-		if lipgloss.Width(line) > bodyW {
-			lines[i] = padTo(clipStyle.Render(line), bodyW)
-		}
-	}
-	return strings.Join(lines, "\n")
 }
 
 // viewString assembles the full rendered frame as a plain string. View wraps
@@ -620,54 +606,80 @@ func (m model) viewString() string {
 		sb.WriteString("\n")
 		sb.WriteString("  " + m.statusBar())
 	} else if m.helpMode {
-		sb.WriteString("\n")                     // row 1: blank
-		sb.WriteString("  " + m.header() + "\n") // row 2: title (2-line top margin)
-		sb.WriteString(m.helpModal())            // rows 3..H-2: modal area = m.height-4 rows
-		sb.WriteString("\n")                     // end the modal's last line
-		sb.WriteString("\n")                     // bottom pad (row H-1)
-		sb.WriteString("  " + m.statusBar())     // row H: status bar
+		// The modal is an overlay: render the live document, then composite the
+		// keybinding box over it (centered), so the markdown keeps showing and
+		// updating behind the modal while help is open.
+		base := m.normalLines()
+		box := strings.Split(m.helpModal(), "\n")
+		boxH := len(box)
+		boxW := 0
+		if boxH > 0 {
+			boxW = lipgloss.Width(box[0])
+		}
+		left := (m.width - boxW) / 2
+		if left < 0 {
+			left = 0
+		}
+		top := 2 + (m.height-4-boxH)/2 // centered in the body region (below the 2 top rows)
+		if top < 2 {
+			top = 2
+		}
+		for i, bl := range box {
+			if r := top + i; r >= 0 && r < len(base) {
+				base[r] = spliceOver(base[r], bl, left)
+			}
+		}
+		sb.WriteString(strings.Join(base, "\n"))
 	} else {
-		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
-		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
-		sb.WriteString("\n")
-		sb.WriteString("  " + m.header() + "\n")
-		sb.WriteString("\n")
-		spinRow := -1
-		if m.thinking {
-			// Spinner sits just below the last real content line visible from the
-			// top of the body (or the first body row when empty), within the body
-			// region. len(m.lines)-m.yOff gives the number of real content rows
-			// still ahead of the viewport top; that is the row index right after
-			// the last visible content line.
-			spinRow = len(m.lines) - m.yOff
-			if spinRow < 0 {
-				spinRow = 0
-			}
-			if spinRow > m.body()-1 {
-				spinRow = m.body() - 1
-			}
-		}
-		for i := 0; i < m.body(); i++ {
-			if i == spinRow {
-				sb.WriteString("  " + padTo(spinnerLine(m.spinFrame, m.thinkLabel, m.spinTicks/10), cw) + vscrollCell(spinRow, pos, size) + "\n")
-				continue
-			}
-			if i < len(rows) {
-				row := rows[i]
-				idx := m.yOff + i
-				if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
-					row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw, colCodeBg)
-				}
-				sb.WriteString("  " + padTo(row, cw) + vscrollCell(i, pos, size) + "\n")
-			} else {
-				sb.WriteString("\n")
-			}
-		}
-		sb.WriteString("\n")
-		sb.WriteString("  " + m.statusBar())
+		sb.WriteString(strings.Join(m.normalLines(), "\n"))
 	}
 
 	return sb.String()
+}
+
+// normalLines renders the standard document view as m.height lines, each padded
+// to the full pane width. It is the base layer both for normal mode and for the
+// help overlay (which composites the modal box over these lines).
+func (m model) normalLines() []string {
+	cw := m.contentWidth()
+	rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
+	pos, size := vthumb(len(m.lines), m.body(), m.yOff)
+	pad := func(s string) string { return padTo(s, m.width) }
+	out := make([]string, 0, m.height)
+	out = append(out, pad(""))                // leading blank
+	out = append(out, pad("  "+m.header()))   // title
+	out = append(out, pad(""))                // top pad
+	spinRow := -1
+	if m.thinking {
+		// Spinner sits just below the last real content line visible from the top
+		// of the body (or the first body row when empty), within the body region.
+		spinRow = len(m.lines) - m.yOff
+		if spinRow < 0 {
+			spinRow = 0
+		}
+		if spinRow > m.body()-1 {
+			spinRow = m.body() - 1
+		}
+	}
+	for i := 0; i < m.body(); i++ {
+		if i == spinRow {
+			out = append(out, pad("  "+padTo(spinnerLine(m.spinFrame, m.thinkLabel, m.spinTicks/10), cw)+vscrollCell(spinRow, pos, size)))
+			continue
+		}
+		if i < len(rows) {
+			row := rows[i]
+			idx := m.yOff + i
+			if idx >= 0 && idx < len(m.lines) && m.lines[idx].HBar > 0 {
+				row = hscrollbarRow(m.lines[idx].HBar, m.xOff, cw, colCodeBg)
+			}
+			out = append(out, pad("  "+padTo(row, cw)+vscrollCell(i, pos, size)))
+		} else {
+			out = append(out, pad(""))
+		}
+	}
+	out = append(out, pad(""))                // bottom pad
+	out = append(out, pad("  "+m.statusBar())) // status bar
+	return out
 }
 
 func (m model) View() tea.View {
