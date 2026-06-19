@@ -61,7 +61,7 @@ func TestHelpInnerDims(t *testing.T) {
 	mc.width, mc.height = 40, 20
 	cw := mc.contentWidth()
 	capW := cw - 14
-	capH := mc.height - 11
+	capH := mc.body() - 5
 	cw2, ch2 := mc.helpInnerDims()
 	if capW > 0 && cw2 > capW {
 		t.Fatalf("medium pane: innerW %d exceeds cap %d", cw2, capW)
@@ -91,8 +91,8 @@ func TestHelpModalFitsAllPanes(t *testing.T) {
 		m.width, m.height = d[0], d[1]
 		m.helpMode = true
 		out := m.helpModal()
-		if want := m.height - 6; lipgloss.Height(out) != want {
-			t.Fatalf("%dx%d: modal height %d != area %d (H-6)", d[0], d[1], lipgloss.Height(out), want)
+		if want := m.body(); lipgloss.Height(out) != want {
+			t.Fatalf("%dx%d: modal height %d != area %d (body)", d[0], d[1], lipgloss.Height(out), want)
 		}
 		for i, line := range strings.Split(out, "\n") {
 			if w := lipgloss.Width(line); w != m.contentWidth() {
@@ -194,30 +194,33 @@ func TestHelpContentSizeWithinMargins(t *testing.T) {
 		t.Fatalf("innerH %d != content height %d", innerH, want)
 	}
 
-	// Within margin caps (cw-14 wide; H-11 tall = modal area H-6 minus chrome 5).
+	// Within margin caps (cw-14 wide; body()-5 tall = modal area body() minus chrome 5).
 	if innerW > cw-14 {
 		t.Fatalf("innerW %d exceeds cap cw(%d)-14 = %d", innerW, cw, cw-14)
 	}
-	if innerH > m.height-11 {
-		t.Fatalf("innerH %d exceeds cap H(%d)-11 = %d", innerH, m.height, m.height-11)
+	if innerH > m.body()-5 {
+		t.Fatalf("innerH %d exceeds cap body(%d)-5 = %d", innerH, m.body(), m.body()-5)
 	}
 }
 
-// TestHelpModalScrollThreshold pins the rule: the modal area is H-6 and the box
-// chrome is 5, so the full content (len(helpLines) rows) fits without scrolling
-// exactly when len <= H-11, i.e. at pane height len+11 and taller; one row
-// shorter, it scrolls.
+// TestHelpModalScrollThreshold pins the rule: the modal fits without scrolling
+// exactly when m.body() >= len(helpLines)+5 (box chrome = border 2 + padding 2 + title 1).
+// Find the smallest height that satisfies it, verify no-scroll; one row shorter, verify scroll.
 func TestHelpModalScrollThreshold(t *testing.T) {
 	m := newModel("T", "hi")
 	m.width = 80
-	threshold := len(m.helpLines) + 11
-	m.height = threshold
-	if _, innerH := m.helpInnerDims(); innerH != len(m.helpLines) {
-		t.Fatalf("H=%d must show all %d help lines (no scroll), got innerH=%d", threshold, len(m.helpLines), innerH)
+	// The modal fits without scrolling exactly when m.body() >= len(helpLines)+5
+	// (box chrome = border 2 + padding 2 + title 1). Find the smallest height
+	// that satisfies it.
+	m.height = 24
+	for ; m.body() < len(m.helpLines)+5; m.height++ {
 	}
-	m.height = threshold - 1
+	if _, innerH := m.helpInnerDims(); innerH != len(m.helpLines) {
+		t.Fatalf("at H=%d (body=%d) modal should not scroll, innerH=%d want %d", m.height, m.body(), innerH, len(m.helpLines))
+	}
+	m.height--
 	if _, innerH := m.helpInnerDims(); innerH >= len(m.helpLines) {
-		t.Fatalf("H=%d must scroll (innerH < %d), got %d", threshold-1, len(m.helpLines), innerH)
+		t.Fatalf("at H=%d (body=%d) modal should scroll, innerH=%d", m.height, m.body(), innerH)
 	}
 }
 
