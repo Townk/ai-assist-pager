@@ -494,32 +494,43 @@ func (m model) helpModal() string {
 	textW, textH, needV, needH := m.helpTextDims()
 	contentW := MaxWideWidth(m.helpLines)
 
-	// Horizontal padding is applied manually so the vertical scrollbar can sit
-	// flush against the right border: each row is leftPad(2) + text + gap(2) +
-	// vbar(1 when needV). The box itself uses no horizontal padding (Padding(1,0)).
+	// All padding is applied manually (the box uses Padding(0,0)) so both
+	// scrollbars run flush to their borders. Each row is leftPad(2) + text +
+	// gap(2) + vbar(1 when needV). Rows top to bottom: top pad, text rows, bottom
+	// pad, then the hbar (when needH) flush against the bottom border with the
+	// bottom pad as its gap above. The vbar occupies the rightmost column on every
+	// row, so it runs from the top border to the bottom border.
 	windowed := Window(m.helpLines, m.helpXOff, m.helpYOff, textW, textH)
-	vpos, vsize := vthumb(len(m.helpLines), textH, m.helpYOff)
-	var body []string
-	for i, row := range windowed {
-		line := "  " + padTo(row, textW) + "  " // left pad + text + 2-col gap
-		if needV {
-			glyph, col := "│", colSurface0
-			if i >= vpos && i < vpos+vsize {
-				glyph, col = "┃", colOverlay1
-			}
-			line += lipgloss.NewStyle().Foreground(lipgloss.Color(col)).Render(glyph)
+	trackH := textH + 2 + bi(needH) // top pad + text rows + bottom pad + optional hbar
+	vpos, vsize := vthumbTrack(len(m.helpLines), textH, trackH, m.helpYOff)
+	vbar := func(trackRow int) string {
+		if !needV {
+			return ""
 		}
-		// band re-injects the modal bg after every inner color reset, so plain
-		// gaps and reset segments keep the modal background instead of the
-		// terminal's (a bare mantleBg prefix is cleared by each segment's reset).
-		body = append(body, band(line, mantleBg, 0))
+		glyph, col := "│", colSurface0
+		if trackRow >= vpos && trackRow < vpos+vsize {
+			glyph, col = "┃", colOverlay1
+		}
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(col)).Render(glyph)
 	}
+	// band re-injects the modal bg after every inner color reset so plain gaps and
+	// reset segments keep the modal background instead of the terminal's.
+	blank := strings.Repeat(" ", textW)
+	row := func(text string, trackRow int) string {
+		return band("  "+text+"  "+vbar(trackRow), mantleBg, 0)
+	}
+	var body []string
+	tr := 0
+	body = append(body, row(blank, tr)) // top pad row
+	tr++
+	for _, w := range windowed {
+		body = append(body, row(padTo(w, textW), tr))
+		tr++
+	}
+	body = append(body, row(blank, tr)) // bottom pad / gap above the hbar
+	tr++
 	if needH {
-		hb := "  " + hscrollbarRow(contentW, m.helpXOff, textW, colMantle) + "  "
-		if needV {
-			hb += " " // keep the row width equal to text rows (blank under the vbar)
-		}
-		body = append(body, band(hb, mantleBg, 0))
+		body = append(body, row(hscrollbarRow(contentW, m.helpXOff, textW, colMantle), tr)) // hbar flush to bottom border
 	}
 
 	content := strings.Join(body, "\n")
@@ -529,7 +540,7 @@ func (m model) helpModal() string {
 		BorderForeground(lipgloss.Color(colSurface1)).
 		BorderBackground(lipgloss.Color(colMantle)).
 		Background(lipgloss.Color(colMantle)).
-		Padding(1, 0).
+		Padding(0, 0).
 		Render(content)
 
 	out := lipgloss.Place(bodyW, bodyH, lipgloss.Center, lipgloss.Center, box)

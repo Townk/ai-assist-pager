@@ -21,6 +21,34 @@ func vthumb(total, visible, off int) (pos, size int) {
 	return pos, size
 }
 
+// vthumbTrack is like vthumb but for a scrollbar whose `track` length may exceed
+// the `visible` window — e.g. when the bar runs flush into the box's top/bottom
+// padding. The thumb is sized to visible/total of the full track and reaches both
+// ends. Returns a full-length thumb when the content fits.
+func vthumbTrack(total, visible, track, off int) (pos, size int) {
+	if track < 1 {
+		return 0, 0
+	}
+	if total <= visible {
+		return 0, track
+	}
+	size = track * visible / total
+	if size < 1 {
+		size = 1
+	}
+	if size > track {
+		size = track
+	}
+	pos = (track - size) * off / (total - visible)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > track-size {
+		pos = track - size
+	}
+	return pos, size
+}
+
 // hthumb returns the thumb [pos, pos+size) within a `view`-wide track for a
 // `blockW`-column block scrolled to `xoff` (clamped). Full track when blockW≤view.
 func hthumb(blockW, view, xoff int) (pos, size int) {
