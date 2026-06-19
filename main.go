@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -24,31 +27,45 @@ func main() {
 	flag.StringVar(&harness, "harness", "agent", "harness label for the header")
 	var fifoPath string
 	flag.StringVar(&fifoPath, "actions-fifo", "", "FIFO path to write button actions to")
+	var inputFifo string
+	flag.StringVar(&inputFifo, "input-fifo", "", "FIFO path to read the input stream from (else stdin)")
+	var thinkingLabel string
+	flag.StringVar(&thinkingLabel, "thinking-label", "Working…", "default spinner label")
 	flag.Parse()
 
-	var md string
-	if flag.NArg() >= 1 {
-		b, err := os.ReadFile(flag.Arg(0))
+	// Input source: the named FIFO (opens for read; blocks until a writer
+	// connects) or stdin. Content streams in; keys come from /dev/tty.
+	var src io.Reader = os.Stdin
+	if inputFifo != "" {
+		f, err := os.OpenFile(inputFifo, os.O_RDONLY, 0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ai-assist-pager: %v\n", err)
 			os.Exit(1)
 		}
-		md = string(b)
-	} else {
-		b, err := os.ReadFile("/dev/stdin")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ai-assist-pager: %v\n", err)
-			os.Exit(1)
-		}
-		md = string(b)
+		defer f.Close()
+		src = f
 	}
+	parser := &streamParser{}
 
-	// Interact on /dev/tty so the file arg (content) and any stdin redirection
-	// don't interfere with key input — the ai-assist-input lesson.
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		// No TTY (tests / pipes): just print the static render and exit.
-		m := newModel(harness, md)
+		// No TTY (tests / pipes): drain the stream, strip control records, render
+		// once, and exit.
+		var b strings.Builder
+		buf := make([]byte, 4096)
+		rd := bufio.NewReader(src)
+		for {
+			n, rerr := rd.Read(buf)
+			for _, ev := range parser.feed(buf[:n]) {
+				if te, ok := ev.(textEvent); ok {
+					b.WriteString(te.text)
+				}
+			}
+			if rerr != nil {
+				break
+			}
+		}
+		m := newModel(harness, b.String())
 		m.width = 100
 		m.fifoPath = fifoPath
 		fmt.Print(m.staticRender())
@@ -59,17 +76,19 @@ func main() {
 	// Force TrueColor: zellij's alt-screen pane underreports the color profile
 	// during bubbletea's auto-detection, causing colors to be downsampled.
 	// The UI targets a truecolor Catppuccin terminal, so we pin it explicitly.
-	m := newModel(harness, md)
+	m := newModel(harness, "")
 	m.fifoPath = fifoPath
+	m.defaultLabel = thinkingLabel
+	m.thinking = true // implicit thinking at launch (spec)
+	m.streaming = true
+	m.reader = bufio.NewReader(src)
+	m.parser = parser
 	prog := tea.NewProgram(
 		m,
 		tea.WithInput(tty),
 		tea.WithOutput(tty),
 		tea.WithColorProfile(colorprofile.TrueColor),
 	)
-	// On quit (q/Esc) we exit straight away; the docked pane is spawned with
-	// --close-on-exit, so it closes rather than parking. No static dump (it would
-	// just flash before the pane closes).
 	if _, err := prog.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "ai-assist-pager: %v\n", err)
 		os.Exit(1)
