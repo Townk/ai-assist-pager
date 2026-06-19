@@ -73,13 +73,16 @@ func strip(s string) string {
 }
 
 type renderer struct {
-	src   []byte
-	width int
-	lines []Line
+	src     []byte
+	width   int
+	lines   []Line
+	buttons []Button
 }
 
-// Render parses markdown and returns tagged, laid-out lines for a given pane width.
-func Render(md string, width int) []Line {
+// Render parses markdown and returns tagged, laid-out lines and a button
+// registry for a given pane width. The button slice is empty until a later
+// task populates it; callers should discard it with _ if unused.
+func Render(md string, width int) ([]Line, []Button) {
 	if width < 1 {
 		width = 1
 	}
@@ -88,7 +91,7 @@ func Render(md string, width int) []Line {
 	doc := gm.Parser().Parse(text.NewReader(src))
 	r := &renderer{src: src, width: width}
 	r.block(doc, 0)
-	return r.lines
+	return r.lines, r.buttons
 }
 
 // block walks the children of n, rendering each block-level node. indent is the

@@ -11,6 +11,7 @@ type model struct {
 	harness string
 	md      string
 	lines   []Line
+	buttons []Button
 	width   int
 	height  int
 	xOff    int
@@ -51,7 +52,7 @@ func (m *model) body() int {
 }
 
 func (m *model) reflow() {
-	m.lines = Render(m.md, m.contentWidth())
+	m.lines, m.buttons = Render(m.md, m.contentWidth())
 	m.clampScroll()
 }
 
@@ -186,7 +187,7 @@ func (m model) View() tea.View {
 // the interactive View().
 func (m model) staticRender() string {
 	cw := m.contentWidth()
-	lines := Render(m.md, cw)
+	lines, _ := Render(m.md, cw)
 	var sb strings.Builder
 	sb.WriteString("  " + m.header() + "\n")
 	sb.WriteString("\n")

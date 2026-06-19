@@ -16,7 +16,7 @@ func joinText(lines []Line) string {
 }
 
 func TestRenderHeadingHasBlockPrefix(t *testing.T) {
-	lines := Render("# Title", 40)
+	lines, _ := Render("# Title", 40)
 	if !strings.Contains(joinText(lines), "▓▓▓ Title") {
 		t.Fatalf("heading missing ▓▓▓ prefix:\n%s", joinText(lines))
 	}
@@ -29,7 +29,7 @@ func TestRenderHeadingHasBlockPrefix(t *testing.T) {
 
 func TestRenderParagraphWraps(t *testing.T) {
 	md := "alpha beta gamma delta epsilon zeta eta theta iota kappa"
-	lines := Render(md, 20)
+	lines, _ := Render(md, 20)
 	for _, l := range lines {
 		if l.Wide {
 			t.Fatalf("paragraph line should not be Wide")
@@ -44,7 +44,8 @@ func TestRenderParagraphWraps(t *testing.T) {
 }
 
 func TestRenderListItems(t *testing.T) {
-	got := joinText(Render("- one\n- two", 40))
+	lines, _ := Render("- one\n- two", 40)
+	got := joinText(lines)
 	if !strings.Contains(got, "one") || !strings.Contains(got, "two") {
 		t.Fatalf("list items missing:\n%s", got)
 	}
@@ -54,7 +55,8 @@ func TestRenderListItems(t *testing.T) {
 }
 
 func TestRenderOrderedList(t *testing.T) {
-	got := joinText(Render("1. first\n2. second", 40))
+	lines, _ := Render("1. first\n2. second", 40)
+	got := joinText(lines)
 	if !strings.Contains(got, "1. first") {
 		t.Fatalf("ordered list item 1 missing:\n%s", got)
 	}
@@ -64,7 +66,7 @@ func TestRenderOrderedList(t *testing.T) {
 }
 
 func TestRenderNestedList(t *testing.T) {
-	lines := Render("- a\n    - b", 40)
+	lines, _ := Render("- a\n    - b", 40)
 	got := joinText(lines)
 	if !strings.Contains(got, "a") || !strings.Contains(got, "b") {
 		t.Fatalf("nested list items missing:\n%s", got)
@@ -92,7 +94,8 @@ func TestRenderNestedList(t *testing.T) {
 
 func TestRenderInlineStrongText(t *testing.T) {
 	// The bold word's text survives (styling is stripped in the assertion).
-	got := joinText(Render("a **bold** word", 40))
+	lines, _ := Render("a **bold** word", 40)
+	got := joinText(lines)
 	if !strings.Contains(got, "bold") {
 		t.Fatalf("strong text missing:\n%s", got)
 	}
@@ -101,7 +104,7 @@ func TestRenderInlineStrongText(t *testing.T) {
 func TestRenderCodeBlockIsWideAndUnwrapped(t *testing.T) {
 	long := "x := aaaaaaaaaa + bbbbbbbbbb + cccccccccc + dddddddddd // long line"
 	md := "```go\n" + long + "\n```"
-	lines := Render(md, 20) // pane narrower than the code line
+	lines, _ := Render(md, 20) // pane narrower than the code line
 	var codeLine *Line
 	for i := range lines {
 		if lines[i].Wide {
@@ -121,7 +124,8 @@ func TestRenderCodeBlockIsWideAndUnwrapped(t *testing.T) {
 }
 
 func TestRenderBlockQuote(t *testing.T) {
-	got := joinText(Render("> hello quote", 40))
+	lines, _ := Render("> hello quote", 40)
+	got := joinText(lines)
 	if !strings.Contains(got, "hello quote") {
 		t.Fatalf("quote text missing:\n%s", got)
 	}
@@ -131,7 +135,7 @@ func TestRenderBlockQuote(t *testing.T) {
 }
 
 func TestRenderQuoteDefaultAdmonition(t *testing.T) {
-	lines := Render("> hello there friend", 40)
+	lines, _ := Render("> hello there friend", 40)
 	// bare quote: NO header line — the first emitted line is a body line.
 	first := strip(lines[0].Text)
 	if !strings.HasPrefix(first, "▋ ") {
@@ -152,7 +156,7 @@ func TestRenderQuoteDefaultAdmonition(t *testing.T) {
 }
 
 func TestRenderQuoteAdmonitionType(t *testing.T) {
-	lines := Render("> [!note]\n> be careful here", 40)
+	lines, _ := Render("> [!note]\n> be careful here", 40)
 	hdr := strip(lines[0].Text)
 	if !strings.Contains(hdr, "Note") {
 		t.Fatalf("expected Note header, got %q", hdr)
@@ -167,7 +171,7 @@ func TestRenderQuoteAdmonitionType(t *testing.T) {
 }
 
 func TestRenderQuoteExplicitQuoteType(t *testing.T) {
-	lines := Render("> [!quote]\n> some quoted body", 40)
+	lines, _ := Render("> [!quote]\n> some quoted body", 40)
 	// first line is the header: must contain "Quote" and the 󱆨 glyph
 	hdr := strip(lines[0].Text)
 	if !strings.Contains(hdr, "Quote") {
@@ -212,7 +216,8 @@ func TestBandFillsWidthWithBg(t *testing.T) {
 
 func TestRenderQuoteReflowsToWidth(t *testing.T) {
 	long := "> " + strings.Repeat("word ", 40)
-	for _, l := range Render(long, 30) {
+	reflowed, _ := Render(long, 30)
+	for _, l := range reflowed {
 		if w := lipgloss.Width(l.Text); w > 30 {
 			t.Fatalf("quote line exceeds content width 30 (got %d): %q", w, strip(l.Text))
 		}
@@ -221,7 +226,7 @@ func TestRenderQuoteReflowsToWidth(t *testing.T) {
 
 func TestRenderCodeBlockNamedLanguageHighlights(t *testing.T) {
 	md := "```go\npackage main\n```"
-	lines := Render(md, 80)
+	lines, _ := Render(md, 80)
 	var codeLine *Line
 	for i := range lines {
 		if lines[i].Wide {
@@ -239,7 +244,7 @@ func TestRenderCodeBlockNamedLanguageHighlights(t *testing.T) {
 
 func TestRenderCodeBlockUnknownLanguageNoPanic(t *testing.T) {
 	md := "```unknown_xyz\nhello world\n```"
-	lines := Render(md, 80)
+	lines, _ := Render(md, 80)
 	var codeLine *Line
 	for i := range lines {
 		if lines[i].Wide {
@@ -257,7 +262,7 @@ func TestRenderCodeBlockUnknownLanguageNoPanic(t *testing.T) {
 
 func TestRenderTableIsWide(t *testing.T) {
 	md := "| Col A | Col B |\n|---|---|\n| one | two |\n| three | four |"
-	lines := Render(md, 12)
+	lines, _ := Render(md, 12)
 	wide := false
 	for _, l := range lines {
 		if l.Wide {
@@ -283,7 +288,7 @@ func TestStripRemovesFullSGR(t *testing.T) {
 }
 
 func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
-	lines := Render("```go\nx := 1\n```", 40)
+	lines, _ := Render("```go\nx := 1\n```", 40)
 	var code *Line
 	for i := range lines {
 		if lines[i].Wide {
@@ -319,7 +324,7 @@ func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
 
 func TestRenderCodeBlockLanguageLabel(t *testing.T) {
 	// Use a language NOT in the icon map so we exercise the text-fallback path.
-	lines := Render("```text\nx := 1\n```", 40)
+	lines, _ := Render("```text\nx := 1\n```", 40)
 	// first line is the top-label bar, Wide=false.
 	if lines[0].Wide {
 		t.Fatal("label line should not be Wide")
@@ -341,7 +346,7 @@ func TestRenderCodeBlockLanguageLabel(t *testing.T) {
 
 func TestRenderCodeBlockIconLabel(t *testing.T) {
 	// Use 'go' which has an icon — verify the tab shows the glyph and ▂ fill.
-	lines := Render("```go\nx := 1\n```", 40)
+	lines, _ := Render("```go\nx := 1\n```", 40)
 	if lines[0].Wide {
 		t.Fatal("icon label line should not be Wide")
 	}
@@ -362,7 +367,7 @@ func TestRenderCodeBlockIconLabel(t *testing.T) {
 }
 
 func TestRenderCodeBlockBottomBar(t *testing.T) {
-	lines := Render("```go\nx := 1\n```", 40)
+	lines, _ := Render("```go\nx := 1\n```", 40)
 	// last line is the bottom edge bar, Wide=false, filled with 🮂, width == 40.
 	last := lines[len(lines)-1]
 	if last.Wide {
