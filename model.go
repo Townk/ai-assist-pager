@@ -266,16 +266,15 @@ func (m model) header() string {
 }
 
 // helpInnerDims returns the modal's inner content area (cols x rows), sized to
-// content and capped to the modal area. The modal area is rows 3..H-2 = H-4
-// lines tall (the pager's leading blank + title sit above on rows 1-2; the
-// 2-line status bar below on rows H-1, H) by cw wide. Box overhead:
-// border(2)+padding(4)=6 wide; border(2)+padding(2)+title(1)=5 tall. So max
-// inner = cw-14 wide, (H-4)-5 = H-9 tall. Content-sized: min(content, cap).
-// Both floored at 1.
+// content and capped to the modal area. The modal area is rows 5..H-2 = H-6
+// lines tall (4 pager-chrome lines above: blank, title, blank, first content
+// line; 2-line status bar below) by cw wide. Box overhead: border(2)+padding(4)
+// =6 wide; border(2)+padding(2)+title(1)=5 tall. So max inner = cw-14 wide,
+// (H-6)-5 = H-11 tall. Content-sized: min(content, cap). Both floored at 1.
 func (m model) helpInnerDims() (innerW, innerH int) {
 	cw := m.contentWidth()
 	maxInnerW := cw - 14
-	maxInnerH := m.height - 9
+	maxInnerH := m.height - 11
 	innerW = MaxWideWidth(m.helpLines)
 	if innerW > maxInnerW {
 		innerW = maxInnerW
@@ -339,9 +338,9 @@ const mantleBg = "\x1b[48;2;24;24;37m" // #181825 = R24 G24 B37
 // helpModal renders the centered keybinding modal over the body region.
 func (m model) helpModal() string {
 	cw := m.contentWidth()
-	// Modal area = rows 3..H-2 (H-4 lines): the pager's leading blank + title
-	// occupy rows 1-2, the 2-line status bar rows H-1, H.
-	bodyW, bodyH := cw, m.height-4
+	// Modal area = rows 5..H-2 (H-6 lines): above it are the 4 pager-chrome lines
+	// (blank, title, blank, the first content line); below it the 2-line status bar.
+	bodyW, bodyH := cw, m.height-6
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -463,13 +462,14 @@ func (m model) viewString() string {
 		sb.WriteString("\n")
 		sb.WriteString("  " + m.statusBar())
 	} else if m.helpMode {
-		sb.WriteString("\n")
-		sb.WriteString("  " + m.header() + "\n")
-		// No top pad: the modal area starts at row 3 (rows 3..H-2 = H-4 lines).
-		sb.WriteString(m.helpModal())
-		sb.WriteString("\n") // end the modal's last line (row H-2)
-		sb.WriteString("\n") // bottom pad (row H-1) above the status bar
-		sb.WriteString("  " + m.statusBar())
+		sb.WriteString("\n")                     // row 1: blank (matches the shell title block)
+		sb.WriteString("  " + m.header() + "\n") // row 2: title
+		sb.WriteString("\n")                     // row 3: blank (title-block trailer)
+		sb.WriteString("\n")                     // row 4: blank (the pager's first content line)
+		sb.WriteString(m.helpModal())            // rows 5..H-2: modal area (H-6 lines)
+		sb.WriteString("\n")                     // end the modal's last line (row H-2)
+		sb.WriteString("\n")                     // row H-1: bottom pad
+		sb.WriteString("  " + m.statusBar())     // row H: status bar
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
 		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
