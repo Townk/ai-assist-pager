@@ -318,15 +318,16 @@ func TestRenderCodeBlockBackgroundStretchesAndSurvives(t *testing.T) {
 }
 
 func TestRenderCodeBlockLanguageLabel(t *testing.T) {
-	lines := Render("```go\nx := 1\n```", 40)
+	// Use a language NOT in the icon map so we exercise the text-fallback path.
+	lines := Render("```text\nx := 1\n```", 40)
 	// first line is the top-label bar, Wide=false.
 	if lines[0].Wide {
 		t.Fatal("label line should not be Wide")
 	}
 	got := strip(lines[0].Text)
-	// Right portion ends with " go " (space + lang + space); suffix is "go ".
-	if !strings.HasSuffix(got, "go ") {
-		t.Fatalf("label line %q should end with %q", got, "go ")
+	// Right portion ends with " text " (space + lang + space); suffix is "text ".
+	if !strings.HasSuffix(got, "text ") {
+		t.Fatalf("label line %q should end with %q", got, "text ")
 	}
 	// Left fill contains the ▂ bar character.
 	if !strings.Contains(got, "▂") {
@@ -335,6 +336,28 @@ func TestRenderCodeBlockLanguageLabel(t *testing.T) {
 	// Total display width must be exactly the content width (40).
 	if w := lipgloss.Width(lines[0].Text); w != 40 {
 		t.Fatalf("label line display width = %d, want 40", w)
+	}
+}
+
+func TestRenderCodeBlockIconLabel(t *testing.T) {
+	// Use 'go' which has an icon — verify the tab shows the glyph and ▂ fill.
+	lines := Render("```go\nx := 1\n```", 40)
+	if lines[0].Wide {
+		t.Fatal("icon label line should not be Wide")
+	}
+	got := strip(lines[0].Text)
+	// The icon glyph for go must appear in the label.
+	goGlyph := langIcons["go"].glyph
+	if !strings.Contains(got, goGlyph) {
+		t.Fatalf("icon label line %q should contain go glyph %q", got, goGlyph)
+	}
+	// Left fill still has ▂.
+	if !strings.Contains(got, "▂") {
+		t.Fatalf("icon label line %q should contain '▂' fill", got)
+	}
+	// Total display width must be exactly the content width (40).
+	if w := lipgloss.Width(lines[0].Text); w != 40 {
+		t.Fatalf("icon label line display width = %d, want 40", w)
 	}
 }
 

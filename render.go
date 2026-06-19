@@ -342,22 +342,40 @@ func (r *renderer) code(n ast.Node) {
 
 	// Top label line: a "tab" shape.
 	// Left portion: ▂ characters in fg colCodeBg (#282C41), no background.
-	// Right portion (when lang != ""): " lang " with bg colCodeBg, fg colOverlay1.
+	// Right portion (when lang != ""): icon glyph in its color (or dim text
+	// fallback) with bg colCodeBg, right-aligned with a trailing space.
 	// Total display width == width. Wide=false.
 	{
 		var topLine string
 		if lang != "" {
-			labelRegion := " " + lang + " "
-			labelCols := lipgloss.Width(labelRegion)
+			var styledLabel string
+			var labelCols int
+			if glyph, color, ok := langIcon(lang); ok {
+				// Icon path: colored glyph + trailing space, on code bg.
+				rendered := lipgloss.NewStyle().
+					Background(lipgloss.Color(colCodeBg)).
+					Foreground(lipgloss.Color(color)).
+					Render(glyph)
+				trailing := lipgloss.NewStyle().
+					Background(lipgloss.Color(colCodeBg)).
+					Render(" ")
+				styledLabel = rendered + trailing
+				// glyph is 1 cell; label region is glyph(1) + trailing space(1).
+				labelCols = lipgloss.Width(glyph) + 1
+			} else {
+				// Text fallback: dim " lang " region.
+				labelRegion := " " + lang + " "
+				labelCols = lipgloss.Width(labelRegion)
+				styledLabel = lipgloss.NewStyle().
+					Background(lipgloss.Color(colCodeBg)).
+					Foreground(lipgloss.Color(colOverlay1)).
+					Render(labelRegion)
+			}
 			fillCols := width - labelCols
 			if fillCols < 0 {
 				fillCols = 0
 			}
 			fill := codeFgANSI + strings.Repeat("▂", fillCols) + "\x1b[0m"
-			styledLabel := lipgloss.NewStyle().
-				Background(lipgloss.Color(colCodeBg)).
-				Foreground(lipgloss.Color(colOverlay1)).
-				Render(labelRegion)
 			topLine = fill + styledLabel
 		} else {
 			topLine = codeFgANSI + strings.Repeat("▂", width) + "\x1b[0m"
