@@ -223,54 +223,14 @@ func (m model) hint() string {
 		Render("j/k ↑↓  ^d/^u half  ^f/^b page  h/l ←→  H/L 0/$ horiz  g/G  q quit  Space hints")
 }
 
-// hintRow renders one body row for hint mode: the plain (already ANSI-stripped)
-// text dimmed to dim, with label chars overlaid at their display columns
-// (labels[col] = label) in the lab standout style, and button-icon cells
-// (keep[col] = "#RRGGBB") kept bright in their own color rather than dimmed.
-// The row is padded to width. Column == rune index here (label rows are
-// blank/space above a tab, and tab lines are single-cell, so this is exact).
-func hintRow(plain string, labels map[int]string, keep map[int]string, width int, dim, lab lipgloss.Style) string {
-	runes := []rune(plain)
-	for len(runes) < width {
-		runes = append(runes, ' ')
-	}
-	if len(runes) > width {
-		runes = runes[:width]
-	}
-	var sb strings.Builder
-	var run []rune
-	flush := func() {
-		if len(run) > 0 {
-			sb.WriteString(dim.Render(string(run)))
-			run = run[:0]
-		}
-	}
-	for i, r := range runes {
-		if lbl, ok := labels[i]; ok {
-			flush()
-			sb.WriteString(lab.Render(lbl))
-		} else if color, ok := keep[i]; ok {
-			flush()
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(string(r)))
-		} else {
-			run = append(run, r)
-		}
-	}
-	flush()
-	return sb.String()
-}
 
 func (m model) View() tea.View {
 	cw := m.contentWidth()
 	var sb strings.Builder
 
 	if m.hintMode {
-		// Flash.nvim-style in-place overlay: dim all body rows, float each label
-		// char on the line directly above its button — or, when that line is
-		// scrolled off the top, on the line directly below (never on the button's
-		// own line, which would overlap the icon). The button icons stay bright.
-
-		// Build labelsByRow: lineIdx → col → label.
+		// Labels float on the line above each button (or below when the line
+		// above is scrolled off the top).
 		labelsByRow := map[int]map[int]string{}
 		for label, b := range m.hintLabels {
 			row := b.Line - 1
@@ -282,46 +242,28 @@ func (m model) View() tea.View {
 			}
 			labelsByRow[row][b.Col] = label
 		}
-
-		// Build keepByRow: each visible button's icon cell stays bright in its own
-		// color (play=green, copy=yellow) instead of being dimmed.
-		keepByRow := map[int]map[int]string{}
-		for _, b := range m.buttons {
-			if b.Line < m.yOff || b.Line >= m.yOff+m.body() {
-				continue
-			}
-			color := colGreen
-			if b.Kind == "copy" {
-				color = colYellow
-			}
-			if keepByRow[b.Line] == nil {
-				keepByRow[b.Line] = map[int]string{}
-			}
-			keepByRow[b.Line][b.Col] = color
-		}
-
 		dim := lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
 		lab := lipgloss.NewStyle().Bold(true).
 			Foreground(lipgloss.Color(colHintLabelFg)).
 			Background(lipgloss.Color(colHintLabelBg))
 
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
-
-		// Empty line before the title.
+		pos, size := vthumb(len(m.lines), m.body(), m.yOff)
 		sb.WriteString("\n")
-		// Header (left-padded, not dimmed).
 		sb.WriteString("  " + m.header() + "\n")
-		// Top padding blank.
 		sb.WriteString("\n")
-		// Body rows: dim + overlay labels, keeping button icons bright.
 		for i, row := range rows {
-			lineIdx := m.yOff + i
-			plain := strip(row)
-			sb.WriteString("  " + hintRow(plain, labelsByRow[lineIdx], keepByRow[lineIdx], cw, dim, lab) + "\n")
+			idx := m.yOff + i
+			var base string
+			if idx >= 0 && idx < len(m.lines) && m.lines[idx].Code {
+				base = hintCodeRow(row, cw) // solid code-bg fill, muted text
+			} else {
+				base = dim.Render(padTo(strip(row), cw))
+			}
+			base = overlayLabels(base, labelsByRow[idx], lab)
+			sb.WriteString("  " + base + vscrollCell(i, pos, size) + "\n")
 		}
-		// Bottom padding blank.
 		sb.WriteString("\n")
-		// Bottom prompt (dim).
 		sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("press a label • Esc cancel"))
 	} else {
 		rows := Window(m.lines, m.xOff, m.yOff, cw, m.body())
